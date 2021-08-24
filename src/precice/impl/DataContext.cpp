@@ -27,6 +27,13 @@ mesh::PtrData DataContext::providedData()
   return _providedData;
 }
 
+time::PtrWaveform DataContext::providedWaveform()
+{
+  PRECICE_TRACE();
+  PRECICE_ASSERT(_providedWaveform);
+  return _providedWaveform;
+}
+
 std::string DataContext::getDataName() const
 {
   PRECICE_TRACE();
@@ -136,24 +143,33 @@ const MappingContext DataContext::mappingContext() const
   return _mappingContext;
 }
 
-void DataContext::initializeProvidedWaveform()
+void DataContext::initializeProvidedWaveform(bool initializedData)
 {
   PRECICE_TRACE();
   PRECICE_ASSERT(not hasMapping());
+  if(initializedData) {
+    _hasInitializedData = 1;
+  }
   initializeWaveform(_providedData, _providedWaveform);
 }
 
-void DataContext::initializeFromWaveform()
+void DataContext::initializeFromWaveform(bool initializedData)
 {
   PRECICE_TRACE();
   PRECICE_ASSERT(hasMapping());
+  if(initializedData) {
+    _hasInitializedData = 1;
+  }
   initializeWaveform(_fromData, _fromWaveform);
 }
 
-void DataContext::initializeToWaveform()
+void DataContext::initializeToWaveform(bool initializedData)
 {
   PRECICE_TRACE();
   PRECICE_ASSERT(hasMapping());
+  if(initializedData) {
+    _hasInitializedData = 1;
+  }
   initializeWaveform(_toData, _toWaveform);
 }
 
@@ -213,7 +229,7 @@ Eigen::VectorXd DataContext::sampleAt(double dt, int timeWindows)
   PRECICE_ASSERT(_providedWaveform->numberOfData() == _providedData->values().size(),
                  _providedWaveform->numberOfData(), _providedData->values().size());
   int order = 1;
-  return _providedWaveform->sample(dt, timeWindows, order);
+  return _providedWaveform->sample(dt, timeWindows + _hasInitializedData, order);
 }
 
 void DataContext::initializeWaveform(mesh::PtrData initializingData, time::PtrWaveform initializedWaveform)

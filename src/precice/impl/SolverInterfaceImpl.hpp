@@ -121,6 +121,25 @@ public:
   double initialize();
 
   /**
+   * @brief Writes scalar data to a vertex
+   *
+   * This function writes a value of a specified vertex to a dataID. The data will be used as initial data
+   *
+   * @param[in] dataID ID to write to.
+   * @param[in] valueIndex Index of the vertex.
+   * @param[in] value the value to write.
+   *
+   * @pre initialize() has been called successfully.
+   * @pre initializeData() has not yet been called.
+   * @pre advance() has not yet been called.
+   * @pre finalize() has not yet been called.
+   */
+  void initializeWriteScalarData(
+      int    dataID,
+      int    valueIndex,
+      double value);
+
+  /**
    * @brief Sets the sofar written data as initial value for the coupling scheme.
    *
    * Erases the written data afterwards.
@@ -744,7 +763,7 @@ private:
   void clearMappings(utils::ptr_vector<MappingContext> contexts);
 
   /// Initializes waveforms of write data contexts before mapping.
-  void initializeWrittenWaveforms();
+  void initializeWrittenWaveforms(bool initializedData = false);
 
   /// Prepare for write mapping
   void storeWriteDataInWrittenWaveform();

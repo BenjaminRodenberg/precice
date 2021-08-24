@@ -56,6 +56,7 @@
 #include "precice/impl/WatchPoint.hpp"
 #include "precice/impl/versions.hpp"
 #include "precice/types.hpp"
+#include "time/Waveform.hpp"
 #include "utils/EigenHelperFunctions.hpp"
 #include "utils/EigenIO.hpp"
 #include "utils/Event.hpp"
@@ -319,6 +320,35 @@ double SolverInterfaceImpl::initialize()
   return _couplingScheme->getNextTimestepMaxLength();
 }
 
+void SolverInterfaceImpl::initializeWriteScalarData(
+      int    dataID,
+      int    valueIndex,
+      double value) {
+
+  if (not _hasInitializedWrittenWaveforms) {
+    initializeWrittenWaveforms(true);
+  }
+
+  PRECICE_TRACE(dataID, valueIndex, value);
+  PRECICE_CHECK(_state != State::Finalized, "initializeWriteScalarData(...) cannot be called after finalize().");
+  PRECICE_REQUIRE_DATA_WRITE(dataID);
+  DataContext &context = _accessor->dataContext(dataID);
+  PRECICE_ASSERT(context.providedWaveform() != nullptr);
+  PRECICE_CHECK(valueIndex >= -1,
+                "Invalid value index ({}) when writing scalar data. Value index must be >= 0. "
+                "Please check the value index for {}",
+                valueIndex, context.providedData()->getName());
+  PRECICE_CHECK(context.providedData()->getDimensions() == 1,
+                "You cannot call writeScalarData on the vector data type \"{0}\". "
+                "Use writeVectorData or change the data type for \"{0}\" to scalar.",
+                context.providedData()->getName());
+  PRECICE_VALIDATE_DATA(static_cast<double *>(&value), 1);
+
+  // @todo should be generalized later.
+  int columnID = 1; // corresponding to initial data
+  context.providedWaveform()->storeScalarAt(value, columnID, valueIndex);
+}
+
 void SolverInterfaceImpl::initializeData()
 {
   PRECICE_TRACE();
@@ -339,12 +369,14 @@ void SolverInterfaceImpl::initializeData()
   PRECICE_DEBUG("Initialize data");
   double dt = _couplingScheme->getNextTimestepMaxLength();
 
-  initializeWrittenWaveforms();
+  if (not _hasInitializedWrittenWaveforms) {
+    initializeWrittenWaveforms();
+  }
   performDataActions({action::Action::WRITE_MAPPING_PRIOR}, 0.0, 0.0, 0.0, dt);
-  doDataTransferAndWriteMapping();
+  doDataTransferAndWriteMapping();  // @todo here the complete Waveform has to be mapped.
   performDataActions({action::Action::WRITE_MAPPING_POST}, 0.0, 0.0, 0.0, dt);
 
-  _couplingScheme->initializeData();
+  _couplingScheme->initializeData();  // @todo here only mesh::Data is exchanged, but we have to exchange time::Waveform
 
   if (_couplingScheme->hasDataBeenReceived()) {
     performDataActions({action::Action::READ_MAPPING_PRIOR}, 0.0, 0.0, 0.0, dt);
@@ -1695,16 +1727,16 @@ void SolverInterfaceImpl::clearMappings(utils::ptr_vector<MappingContext> contex
   }
 }
 
-void SolverInterfaceImpl::initializeWrittenWaveforms()
+void SolverInterfaceImpl::initializeWrittenWaveforms(bool initializedData)
 {
   PRECICE_TRACE();
   PRECICE_ASSERT(not _hasInitializedWrittenWaveforms);
   for (impl::DataContext &context : _accessor->writeDataContexts()) {
     if (context.hasMapping()) {
-      context.initializeFromWaveform();
-      context.initializeToWaveform();
+      context.initializeFromWaveform(initializedData);
+      context.initializeToWaveform(initializedData);
     } else {
-      context.initializeProvidedWaveform();
+      context.initializeProvidedWaveform(initializedData);
     }
   }
   _hasInitializedWrittenWaveforms = true;

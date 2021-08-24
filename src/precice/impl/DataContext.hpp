@@ -23,6 +23,8 @@ public:
 
   mesh::PtrData providedData();
 
+  time::PtrWaveform providedWaveform();
+
   std::string getDataName() const;
 
   int getProvidedDataID() const;
@@ -54,11 +56,11 @@ public:
   const MappingContext mappingContext() const;
 
   // for updating waveforms after communication
-  void initializeProvidedWaveform();
+  void initializeProvidedWaveform(bool initializedData = false);
 
-  void initializeFromWaveform();
+  void initializeFromWaveform(bool initializedData = false);
 
-  void initializeToWaveform();
+  void initializeToWaveform(bool initializedData = false);
 
   // for mapping waveforms
   void moveWaveformSampleToData(int sampleID);
@@ -104,6 +106,9 @@ private:
   mesh::PtrData _toData;
 
   MappingContext _mappingContext;
+
+  //  set to 1, if there is initialized data for this waveform that can be used for interpolation
+  int _hasInitializedData = 0;
 
   // helper function for initializing waveforms from given data
   void initializeWaveform(mesh::PtrData initializingData, time::PtrWaveform initializedWaveform);

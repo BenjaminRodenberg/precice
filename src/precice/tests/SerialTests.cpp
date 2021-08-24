@@ -302,7 +302,7 @@ BOOST_AUTO_TEST_CASE(testExplicitReadWriteScalarDataWithWaveformSampling)
   typedef double (*DataFunction)(double, int);
 
   DataFunction dataOneFunction = [](double t, int idx) -> double {
-    return (double) (t + idx);
+    return (double) (2 + t + idx);
   };
   DataFunction dataTwoFunction = [](double t, int idx) -> double {
     return (double) (10 + t + idx);
@@ -368,6 +368,11 @@ BOOST_AUTO_TEST_CASE(testExplicitReadWriteScalarDataWithWaveformSampling)
     BOOST_TEST(readDataID == 2);
   }
 
+  for (int i = 0; i < n_vertices; i++) {
+    writeData[i] = writeFunction(time - dt, i);
+    precice.initializeWriteScalarData(writeDataID, vertexIDs[i], writeData[i]);
+  }
+
   if (precice.isActionRequired(precice::constants::actionWriteInitialData())) {
     for (int i = 0; i < n_vertices; i++) {
       writeData[i] = writeFunction(time, i);
@@ -391,23 +396,11 @@ BOOST_AUTO_TEST_CASE(testExplicitReadWriteScalarDataWithWaveformSampling)
         precice.readScalarData(readDataID, vertexIDs[i], currentDt, readData[i]);
         BOOST_TEST(readData[i] == readFunction(readTime, i));
         precice.readScalarData(readDataID, vertexIDs[i], currentDt / 4, readData[i]);
-        if (timestep == 0) { // in the first window, we only have one sample of data. Therefore constant interpolation
-          BOOST_TEST(readData[i] == readFunction(readTime, i));
-        } else { // in the following windows we have two samples of data. Therefore linear interpolation
-          BOOST_TEST(readData[i] == readFunction(readTime - currentDt * 3 / 4, i));
-        }
+        BOOST_TEST(readData[i] == readFunction(readTime - currentDt * 3 / 4, i));
         precice.readScalarData(readDataID, vertexIDs[i], currentDt / 2, readData[i]);
-        if (timestep == 0) { // in the first window, we only have one sample of data. Therefore constant interpolation
-          BOOST_TEST(readData[i] == readFunction(readTime, i));
-        } else { // in the following windows we have two samples of data. Therefore linear interpolation
-          BOOST_TEST(readData[i] == readFunction(readTime - currentDt / 2, i));
-        }
+        BOOST_TEST(readData[i] == readFunction(readTime - currentDt / 2, i));
         precice.readScalarData(readDataID, vertexIDs[i], currentDt * 3 / 4, readData[i]);
-        if (timestep == 0) { // in the first window, we only have one sample of data. Therefore constant interpolation
-          BOOST_TEST(readData[i] == readFunction(readTime, i));
-        } else { // in the following windows we have two samples of data. Therefore linear interpolation
-          BOOST_TEST(readData[i] == readFunction(readTime - currentDt / 4, i));
-        }
+        BOOST_TEST(readData[i] == readFunction(readTime - currentDt / 4, i));
       }
     }
 
@@ -445,7 +438,7 @@ BOOST_AUTO_TEST_CASE(testExplicitReadWriteScalarDataWithWaveformSubcycling)
   typedef double (*DataFunction)(double, int);
 
   DataFunction dataOneFunction = [](double t, int idx) -> double {
-    return (double) (t + idx);
+    return (double) (2 + t + idx);
   };
   DataFunction dataTwoFunction = [](double t, int idx) -> double {
     return (double) (10 + t + idx);
