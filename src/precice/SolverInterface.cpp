@@ -31,6 +31,13 @@ double SolverInterface::initialize()
   return _impl->initialize();
 }
 
+void SolverInterface::initializeWriteScalarData(
+      int    dataID,
+      int    valueIndex,
+      double value) {
+  _impl->initializeWriteScalarData(dataID, valueIndex, value);
+}
+
 void SolverInterface::initializeData()
 {
   _impl->initializeData();

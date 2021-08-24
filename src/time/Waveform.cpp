@@ -42,6 +42,13 @@ void Waveform::storeAt(const Eigen::VectorXd data, int columnID)
   this->_timeWindows.col(columnID) = data;
 }
 
+void Waveform::storeScalarAt(const double value, int columnID, int valueIndex)
+{
+  PRECICE_ASSERT(_timeWindows.cols() > columnID, numberOfSamples(), columnID);
+  PRECICE_ASSERT(valueIndex < numberOfData(), valueIndex, numberOfData());
+  this->_timeWindows.col(columnID)(valueIndex) = value;
+}
+
 Eigen::VectorXd Waveform::sample(double dt, int timeWindows, int order)
 {
   PRECICE_ASSERT(dt >= 0, "Sampling outside of valid range!");

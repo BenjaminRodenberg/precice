@@ -94,6 +94,25 @@ public:
   double initialize();
 
   /**
+   * @brief Writes scalar data to a vertex
+   *
+   * This function writes a value of a specified vertex to a dataID. The data will be used as initial data
+   *
+   * @param[in] dataID ID to write to.
+   * @param[in] valueIndex Index of the vertex.
+   * @param[in] value the value to write.
+   *
+   * @pre initialize() has been called successfully.
+   * @pre initializeData() has not yet been called.
+   * @pre advance() has not yet been called.
+   * @pre finalize() has not yet been called.
+   */
+  void initializeWriteScalarData(
+      int    dataID,
+      int    valueIndex,
+      double value);
+
+  /**
    * @brief Initializes coupling data.
    *
    * The starting values for coupling data are zero by default.

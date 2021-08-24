@@ -38,6 +38,14 @@ public:
   void storeAt(const Eigen::VectorXd data, int columnID);
 
   /**
+   * @brief Updates entry in _timeWindows corresponding to a given column ID and data ID with given scalar value
+   * @param value scalar value at data ID for this time window
+   * @param columnID ID of column to be updated
+   * @param valueIndex ID of value to be updated
+   */
+  void storeScalarAt(const double value, int columnID, int valueIndex);
+
+  /**
    * @brief Called, when moving to the next time window. All entries in _timeWindows are shifted. The new entry is initialized as the value from the last window (= constant extrapolation)
    * @param timeWindows number of samples that are valid and may be used for extrapolation. Usually number of past time windows.
    */
