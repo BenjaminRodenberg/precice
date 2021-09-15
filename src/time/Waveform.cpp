@@ -25,9 +25,19 @@ Waveform::Waveform(
   PRECICE_ASSERT(numberOfData() == initializedNumberOfData);
 }
 
+void Waveform::resizeData(int newNumberOfData)
+{
+  _timeWindows = Eigen::MatrixXd::Zero(newNumberOfData, numberOfSamples());
+  PRECICE_ASSERT(numberOfData() == newNumberOfData);
+}
+
 void Waveform::store(const Eigen::VectorXd &data)
 {
-  int columnID = 0;
+  this->storeAt(data, 0);
+}
+
+void Waveform::storeAt(const Eigen::VectorXd data, int columnID)
+{
   PRECICE_ASSERT(_timeWindows.cols() > columnID, numberOfSamples(), columnID);
   PRECICE_ASSERT(data.size() == numberOfData(), data.size(), numberOfData());
   this->_timeWindows.col(columnID) = data;

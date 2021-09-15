@@ -296,16 +296,15 @@ double SolverInterfaceImpl::initialize()
   int    timeWindow = 1;
 
   PRECICE_DEBUG("Initialize coupling schemes");
+  double dt = _couplingScheme->getNextTimestepMaxLength();
+
   _couplingScheme->initialize(time, timeWindow);
   PRECICE_ASSERT(_couplingScheme->isInitialized());
 
-  double dt = 0.0;
-
-  dt = _couplingScheme->getNextTimestepMaxLength();
-
+  initializeReadWaveforms();
   if (_couplingScheme->hasDataBeenReceived()) {
     performDataActions({action::Action::READ_MAPPING_PRIOR}, 0.0, 0.0, 0.0, dt);
-    mapReadData();
+    doDataTransferAndReadMapping();
     performDataActions({action::Action::READ_MAPPING_POST}, 0.0, 0.0, 0.0, dt);
   }
 
@@ -340,17 +339,19 @@ void SolverInterfaceImpl::initializeData()
   PRECICE_DEBUG("Initialize data");
   double dt = _couplingScheme->getNextTimestepMaxLength();
 
+  initializeWrittenWaveforms();
   performDataActions({action::Action::WRITE_MAPPING_PRIOR}, 0.0, 0.0, 0.0, dt);
-  mapWrittenData();
+  doDataTransferAndWriteMapping();
   performDataActions({action::Action::WRITE_MAPPING_POST}, 0.0, 0.0, 0.0, dt);
 
   _couplingScheme->initializeData();
 
   if (_couplingScheme->hasDataBeenReceived()) {
     performDataActions({action::Action::READ_MAPPING_PRIOR}, 0.0, 0.0, 0.0, dt);
-    mapReadData();
+    doDataTransferAndReadMapping();
     performDataActions({action::Action::READ_MAPPING_POST}, 0.0, 0.0, 0.0, dt);
   }
+
   resetWrittenData();
   PRECICE_DEBUG("Plot output");
   for (const io::ExportContext &context : _accessor->exportContexts()) {
@@ -412,18 +413,32 @@ double SolverInterfaceImpl::advance(
   timeWindowComputedPart = timeWindowSize - _couplingScheme->getThisTimeWindowRemainder();
   time                   = _couplingScheme->getTime();
 
+  if (not _hasInitializedWrittenWaveforms) { // necessary, if initializeData was not called or if mesh was reset.
+    PRECICE_ASSERT(not _hasInitializedData || _hasResetMesh);
+    initializeWrittenWaveforms();
+  }
+
   if (_couplingScheme->willDataBeExchanged(0.0)) {
     performDataActions({action::Action::WRITE_MAPPING_PRIOR}, time, computedTimestepLength, timeWindowComputedPart, timeWindowSize);
-    mapWrittenData();
+    doDataTransferAndWriteMapping();
     performDataActions({action::Action::WRITE_MAPPING_POST}, time, computedTimestepLength, timeWindowComputedPart, timeWindowSize);
   }
 
   PRECICE_DEBUG("Advance coupling scheme");
   _couplingScheme->advance();
 
+  if (not _hasInitializedReadWaveforms) { // necessary, if mesh was reset.
+    PRECICE_ASSERT(_hasResetMesh);
+    initializeReadWaveforms();
+  }
+
+  if (_couplingScheme->isTimeWindowComplete()) {
+    moveReadWaveform();
+  }
+
   if (_couplingScheme->hasDataBeenReceived()) {
     performDataActions({action::Action::READ_MAPPING_PRIOR}, time, computedTimestepLength, timeWindowComputedPart, timeWindowSize);
-    mapReadData();
+    doDataTransferAndReadMapping();
     performDataActions({action::Action::READ_MAPPING_POST}, time, computedTimestepLength, timeWindowComputedPart, timeWindowSize);
   }
 
@@ -440,6 +455,11 @@ double SolverInterfaceImpl::advance(
 
   _meshLock.lockAll();
   solverEvent.start(precice::syncMode);
+
+  // after advance was called we can call resetMesh again
+  // this condition is not a must, but increases security and resetMesh is a barely used feature. Feel free to remove this restriction, if you have a good reason.
+  _hasResetMesh = false;
+
   return _couplingScheme->getNextTimestepMaxLength();
 }
 
@@ -649,6 +669,10 @@ void SolverInterfaceImpl::resetMesh(
   PRECICE_DEBUG("Clear mesh positions for mesh \"{}\"", context.mesh->getName());
   _meshLock.unlock(meshID);
   context.mesh->clear();
+
+  _hasInitializedReadWaveforms = false;
+  _hasInitializedReadWaveforms = false;
+  _hasResetMesh                = true;
 }
 
 int SolverInterfaceImpl::setMeshVertex(
@@ -970,7 +994,11 @@ void SolverInterfaceImpl::mapWriteDataFrom(
                 context.mesh->getName());
 
   double time = _couplingScheme->getTime();
-  performDataActions({action::Action::WRITE_MAPPING_PRIOR}, time, 0, 0, 0);
+  performDataActions({action::Action::WRITE_MAPPING_PRIOR}, time, 0.0, 0.0, 0.0);
+
+  // @todo add check here to avoid initializing again and again.
+  _hasInitializedWrittenWaveforms = false; // @todo remove this! Trigger should only be set once.
+  initializeWrittenWaveforms();            // @todo should only initialize waveform for the fromMeshID
 
   for (impl::MappingContext &mappingContext : context.fromMappingContexts) {
     if (not mappingContext.mapping->hasComputedMapping()) {
@@ -985,11 +1013,17 @@ void SolverInterfaceImpl::mapWriteDataFrom(
       context.resetToData();
       PRECICE_DEBUG("Map data \"{}\" from mesh \"{}\"", context.getDataName(), context.getMeshName());
       PRECICE_ASSERT(mappingContext.mapping == context.mappingContext().mapping);
-      mappingContext.mapping->map(context.getFromDataID(), context.getToDataID());
+      // iterate over all the samples in the _fromWaveform
+      for (int sampleID = 0; sampleID < context.numberOfSamplesInWaveform(); ++sampleID) {
+        context.moveWaveformSampleToData(sampleID);                                              // put samples from _fromWaveform into _fromData
+        context.mappingContext().mapping->map(context.getFromDataID(), context.getToDataID());   // map from _fromData to _toData
+        context.moveDataToWaveformSample(sampleID);                                              // store _toData at the right place into the _toWaveform
+        PRECICE_DEBUG("Mapped values = {}", utils::previewRange(3, context.toData()->values())); // @todo might be better to move this debug message into Mapping::map and remove getter DataContext::toData()
+      }
     }
     mappingContext.hasMappedData = true;
   }
-  performDataActions({action::Action::WRITE_MAPPING_POST}, time, 0, 0, 0);
+  performDataActions({action::Action::WRITE_MAPPING_POST}, time, 0.0, 0.0, 0.0);
 }
 
 void SolverInterfaceImpl::mapReadDataTo(
@@ -1004,7 +1038,11 @@ void SolverInterfaceImpl::mapReadDataTo(
                 context.mesh->getName());
 
   double time = _couplingScheme->getTime();
-  performDataActions({action::Action::READ_MAPPING_PRIOR}, time, 0, 0, 0);
+  performDataActions({action::Action::READ_MAPPING_PRIOR}, time, 0.0, 0.0, 0.0);
+
+  // @todo add check here to avoid initializing again and again.
+  _hasInitializedReadWaveforms = false; // @todo remove this! Trigger should only be set once.
+  initializeReadWaveforms();            // @todo should only initialize waveform for the toMeshID
 
   for (impl::MappingContext &mappingContext : context.toMappingContexts) {
     if (not mappingContext.mapping->hasComputedMapping()) {
@@ -1018,12 +1056,17 @@ void SolverInterfaceImpl::mapReadDataTo(
       context.resetToData();
       PRECICE_DEBUG("Map data \"{}\" to mesh \"{}\"", context.getDataName(), context.getMeshName());
       PRECICE_ASSERT(mappingContext.mapping == context.mappingContext().mapping);
-      mappingContext.mapping->map(context.getFromDataID(), context.getToDataID());
-      PRECICE_DEBUG("Mapped values = {}", utils::previewRange(3, context.toData()->values())); // @todo might be better to move this debug message into Mapping::map and remove getter DataContext::toData()
+      // iterate over all the samples in the _fromWaveform
+      for (int sampleID = 0; sampleID < context.numberOfSamplesInWaveform(); ++sampleID) {
+        context.moveWaveformSampleToData(sampleID);                                              // put samples from _fromWaveform into _fromData
+        context.mappingContext().mapping->map(context.getFromDataID(), context.getToDataID());   // map from _fromData to _toData
+        context.moveDataToWaveformSample(sampleID);                                              // store _toData at the right place into the _toWaveform
+        PRECICE_DEBUG("Mapped values = {}", utils::previewRange(3, context.toData()->values())); // @todo might be better to move this debug message into Mapping::map and remove getter DataContext::toData()
+      }
     }
     mappingContext.hasMappedData = true;
   }
-  performDataActions({action::Action::READ_MAPPING_POST}, time, 0, 0, 0);
+  performDataActions({action::Action::READ_MAPPING_POST}, time, 0.0, 0.0, 0.0);
 }
 
 void SolverInterfaceImpl::writeBlockVectorData(
@@ -1186,12 +1229,14 @@ void SolverInterfaceImpl::readBlockVectorData(
   PRECICE_CHECK(values != nullptr, "readBlockVectorData() was called with values == nullptr");
   DataContext &context = _accessor->dataContext(dataID);
   PRECICE_ASSERT(context.providedData() != nullptr);
+  PRECICE_ASSERT(_hasInitializedReadWaveforms);
   mesh::Data &data = *context.providedData();
   PRECICE_CHECK(data.getDimensions() == _dimensions,
                 "You cannot call readBlockVectorData on the scalar data type \"{0}\". "
                 "Use readBlockScalarData or change the data type for \"{0}\" to vector.",
                 data.getName());
-  auto &     valuesInternal = data.values();
+  const auto normalizedDt   = timeWindowDt / _couplingScheme->getTimeWindowSize(); //@todo might be moved into coupling scheme
+  const auto valuesInternal = context.sampleAt(normalizedDt);
   const auto vertexCount    = valuesInternal.size() / data.getDimensions();
   for (int i = 0; i < size; i++) {
     const auto valueIndex = valueIndices[i];
@@ -1233,6 +1278,7 @@ void SolverInterfaceImpl::readVectorData(
   PRECICE_REQUIRE_DATA_READ(dataID);
   DataContext &context = _accessor->dataContext(dataID);
   PRECICE_ASSERT(context.providedData() != nullptr);
+  PRECICE_ASSERT(_hasInitializedReadWaveforms);
   mesh::Data &data = *context.providedData();
   PRECICE_CHECK(valueIndex >= -1,
                 "Invalid value index ( {} ) when reading vector data. Value index must be >= 0. "
@@ -1241,8 +1287,9 @@ void SolverInterfaceImpl::readVectorData(
   PRECICE_CHECK(data.getDimensions() == _dimensions,
                 "You cannot call readVectorData on the scalar data type \"{0}\". Use readScalarData or change the data type for \"{0}\" to vector.",
                 data.getName());
-  auto &     values      = data.values();
-  const auto vertexCount = values.size() / data.getDimensions();
+  const auto normalizedDt = timeWindowDt / _couplingScheme->getTimeWindowSize(); //@todo might be moved into coupling scheme
+  const auto values       = context.sampleAt(normalizedDt);
+  const auto vertexCount  = values.size() / data.getDimensions();
   PRECICE_CHECK(0 <= valueIndex && valueIndex < vertexCount,
                 "Cannot read data \"{}\" to invalid Vertex ID ({}). "
                 "Please make sure you only use the results from calls to setMeshVertex/Vertices().",
@@ -1286,12 +1333,14 @@ void SolverInterfaceImpl::readBlockScalarData(
   PRECICE_CHECK(values != nullptr, "readBlockScalarData() was called with values == nullptr");
   DataContext &context = _accessor->dataContext(dataID);
   PRECICE_ASSERT(context.providedData() != nullptr);
+  PRECICE_ASSERT(_hasInitializedReadWaveforms);
   mesh::Data &data = *context.providedData();
   PRECICE_CHECK(data.getDimensions() == 1,
                 "You cannot call readBlockScalarData on the vector data type \"{0}\". "
                 "Use readBlockVectorData or change the data type for \"{0}\" to scalar.",
                 data.getName());
-  auto &     valuesInternal = data.values();
+  const auto normalizedDt   = timeWindowDt / _couplingScheme->getTimeWindowSize(); //@todo might be moved into coupling scheme
+  const auto valuesInternal = context.sampleAt(normalizedDt);
   const auto vertexCount    = valuesInternal.size();
 
   for (int i = 0; i < size; i++) {
@@ -1330,6 +1379,7 @@ void SolverInterfaceImpl::readScalarData(
   PRECICE_REQUIRE_DATA_READ(dataID);
   DataContext &context = _accessor->dataContext(dataID);
   PRECICE_ASSERT(context.providedData() != nullptr);
+  PRECICE_ASSERT(_hasInitializedReadWaveforms);
   mesh::Data &data = *context.providedData();
   PRECICE_CHECK(valueIndex >= -1,
                 "Invalid value index ( {} ) when reading scalar data. Value index must be >= 0. "
@@ -1339,8 +1389,9 @@ void SolverInterfaceImpl::readScalarData(
                 "You cannot call readScalarData on the vector data type \"{}\". "
                 "Use readVectorData or change the data type for \"{}\" to scalar.",
                 data.getName());
-  auto &     values      = data.values();
-  const auto vertexCount = values.size();
+  const auto normalizedDt = timeWindowDt / _couplingScheme->getTimeWindowSize(); //@todo might be moved into coupling scheme
+  const auto values       = context.sampleAt(normalizedDt);
+  const auto vertexCount  = values.size();
   PRECICE_CHECK(0 <= valueIndex && valueIndex < vertexCount,
                 "Cannot read data \"{}\" from invalid Vertex ID ({}). "
                 "Please make sure you only use the results from calls to setMeshVertex/Vertices().",
@@ -1613,6 +1664,7 @@ void SolverInterfaceImpl::mapData(const utils::ptr_vector<DataContext> &contexts
   PRECICE_TRACE();
   using namespace mapping;
   MappingConfiguration::Timing timing;
+  int                          sampleID = 0;
   for (impl::DataContext &context : contexts) {
     if (context.hasMapping()) {
       timing         = context.mappingContext().timing;
@@ -1624,11 +1676,15 @@ void SolverInterfaceImpl::mapData(const utils::ptr_vector<DataContext> &contexts
         int outDataID = context.getToDataID();
         PRECICE_DEBUG("Map \"{}\" data \"{}\" from mesh \"{}\"",
                       mappingType, context.getDataName(), context.getMeshName());
-        context.resetToData();
         PRECICE_DEBUG("Map from dataID {} to dataID: {}", inDataID, outDataID);
-        context.mappingContext().mapping->map(inDataID, outDataID);
+        context.resetToData();
+        context.moveWaveformSampleToData(sampleID);                                              // put samples from _fromWaveform into _fromData
+        context.mappingContext().mapping->map(inDataID, outDataID);                              // map from _fromData to _toData
+        context.moveDataToWaveformSample(sampleID);                                              // store _toData at the right place into the _toWaveform
         PRECICE_DEBUG("Mapped values = {}", utils::previewRange(3, context.toData()->values())); // @todo might be better to move this debug message into Mapping::map and remove getter DataContext::toData()
       }
+    } else {
+      context.moveProvidedDataToProvidedWaveformSample(0); // store _providedData at the right place into the _providedWaveform
     }
   }
 }
@@ -1645,6 +1701,72 @@ void SolverInterfaceImpl::clearMappings(utils::ptr_vector<MappingContext> contex
     }
     context.hasMappedData = false;
   }
+}
+
+void SolverInterfaceImpl::initializeWrittenWaveforms()
+{
+  PRECICE_TRACE();
+  PRECICE_ASSERT(not _hasInitializedWrittenWaveforms);
+  for (impl::DataContext &context : _accessor->writeDataContexts()) {
+    if (context.hasMapping()) {
+      context.initializeFromWaveform();
+      context.initializeToWaveform();
+    } else {
+      context.initializeProvidedWaveform();
+    }
+  }
+  _hasInitializedWrittenWaveforms = true;
+}
+
+void SolverInterfaceImpl::storeWriteDataInWrittenWaveform()
+{
+  PRECICE_TRACE();
+  PRECICE_ASSERT(_hasInitializedWrittenWaveforms);
+  for (impl::DataContext &context : _accessor->writeDataContexts()) {
+    context.storeFromDataInWaveform();
+  }
+}
+
+void SolverInterfaceImpl::storeReadDataInReadWaveform()
+{
+  PRECICE_TRACE();
+  PRECICE_ASSERT(_hasInitializedReadWaveforms);
+  for (impl::DataContext &context : _accessor->readDataContexts()) {
+    context.storeFromDataInWaveform();
+  }
+}
+
+void SolverInterfaceImpl::prepareExchangedWriteData()
+{
+  PRECICE_TRACE();
+  PRECICE_ASSERT(_hasInitializedWrittenWaveforms);
+  for (impl::DataContext &context : _accessor->writeDataContexts()) {
+    context.sampleWaveformInToData();
+  }
+}
+
+void SolverInterfaceImpl::prepareExchangedReadData()
+{
+  PRECICE_TRACE();
+  PRECICE_ASSERT(_hasInitializedReadWaveforms);
+  for (impl::DataContext &context : _accessor->readDataContexts()) {
+    context.sampleWaveformInToData();
+  }
+}
+
+void SolverInterfaceImpl::initializeReadWaveforms()
+{
+  PRECICE_TRACE();
+  PRECICE_ASSERT(not _hasInitializedReadWaveforms);
+  for (impl::DataContext &context : _accessor->readDataContexts()) {
+    if (context.hasMapping()) {
+      context.initializeFromWaveform();
+      context.initializeToWaveform();
+    } else {
+      context.initializeProvidedWaveform();
+    }
+  }
+  _hasInitializedReadWaveforms = true;
 }
 
 void SolverInterfaceImpl::mapWrittenData()
@@ -1804,6 +1926,27 @@ const mesh::Mesh &SolverInterfaceImpl::mesh(const std::string &meshName) const
 {
   PRECICE_TRACE(meshName);
   return *_accessor->usedMeshContext(meshName).mesh;
+}
+
+void SolverInterfaceImpl::doDataTransferAndWriteMapping()
+{
+  storeWriteDataInWrittenWaveform();
+  mapWrittenData();
+  prepareExchangedWriteData();
+}
+
+void SolverInterfaceImpl::doDataTransferAndReadMapping()
+{
+  storeReadDataInReadWaveform(); // @todo this part is difficult: If the window is repeated, we have to overwrite the sample, if the window is complete and we move to the next window, we have to shift all samples and go to the next window.
+  mapReadData();
+  prepareExchangedReadData();
+}
+
+void SolverInterfaceImpl::moveReadWaveform()
+{
+  for (impl::DataContext &context : _accessor->readDataContexts()) {
+    context.moveProvidedWaveform();
+  }
 }
 
 } // namespace impl
