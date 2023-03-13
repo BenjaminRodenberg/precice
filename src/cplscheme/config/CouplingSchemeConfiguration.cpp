@@ -307,7 +307,7 @@ void CouplingSchemeConfiguration::xmlEndTagCallback(
   if (tag.getNamespace() == TAG) {
     if (_config.type == VALUE_SERIAL_EXPLICIT) {
 
-      // The first participants waveform order has to be 0 for serial explicit coupling
+      //Check the order of both participants in the explicit coupling
       if (_experimental) {
         const auto first  = _config.participants[0];
         const auto second = _config.participants[1];
@@ -315,6 +315,7 @@ void CouplingSchemeConfiguration::xmlEndTagCallback(
         auto first_participant = _participantConfig->getParticipant(first);
         for (auto &dataContext : first_participant->readDataContexts()) {
           int usedOrder = dataContext.getInterpolationOrder();
+          // The first participants waveform order has to be 0 for serial explicit coupling
           if (usedOrder != 0) {
             PRECICE_ERROR(
                 "You configured <read-data name=\"{}\" mesh=\"{}\" waveform-order=\"{}\" />, but for the serial explicit coupling scheme only a maximum waveform-order of \"{}\" is allowed for the first participant.",
