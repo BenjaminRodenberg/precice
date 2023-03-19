@@ -135,7 +135,7 @@ void CouplingData::storeExtrapolationData()
 void CouplingData::initializeStorage(Eigen::VectorXd data)
 {
   bool keepWindowStart = false;
-  _timeStepsStorage.clear(keepWindowStart);
+  _data->timeStepsStorage().clear(keepWindowStart);
   storeValuesAtTime(time::Storage::WINDOW_START, data);
   storeValuesAtTime(time::Storage::WINDOW_END, data);
 }
@@ -148,25 +148,25 @@ void CouplingData::overwriteValuesAtWindowEnd(Eigen::VectorXd data)
 
 void CouplingData::clearTimeStepsStorage()
 {
-  _timeStepsStorage.clear();
+  _data->timeStepsStorage().clear();
 }
 
 void CouplingData::moveTimeStepsStorage()
 {
-  _timeStepsStorage.move();
+  _data->timeStepsStorage().move();
 }
 
 void CouplingData::storeValuesAtTime(double relativeDt, Eigen::VectorXd data, bool mustOverwriteExisting)
 {
   PRECICE_ASSERT(math::greaterEquals(relativeDt, time::Storage::WINDOW_START), relativeDt);
-  PRECICE_ASSERT(math::greaterEquals(relativeDt, _timeStepsStorage.maxStoredNormalizedDt()), relativeDt, _timeStepsStorage.maxStoredNormalizedDt());
+  PRECICE_ASSERT(math::greaterEquals(relativeDt, _data->timeStepsStorage().maxStoredNormalizedDt()), relativeDt, _data->timeStepsStorage().maxStoredNormalizedDt());
   PRECICE_ASSERT(math::greaterEquals(time::Storage::WINDOW_END, relativeDt), relativeDt);
-  _timeStepsStorage.setValuesAtTime(relativeDt, data, mustOverwriteExisting);
+  _data->timeStepsStorage().setValuesAtTime(relativeDt, data, mustOverwriteExisting);
 }
 
 Eigen::VectorXd CouplingData::getValuesAtTime(double relativeDt)
 {
-  return _timeStepsStorage.getValuesAtTime(relativeDt);
+  return _data->timeStepsStorage().getValuesAtTime(relativeDt);
 }
 
 } // namespace precice::cplscheme

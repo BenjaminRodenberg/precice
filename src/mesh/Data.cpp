@@ -51,6 +51,11 @@ const Eigen::MatrixXd &Data::gradientValues() const
   return _gradientValues;
 }
 
+time::Storage &Data::timeStepsStorage()
+{
+  return _timeStepsStorage;
+}
+
 const std::string &Data::getName() const
 {
   return _name;

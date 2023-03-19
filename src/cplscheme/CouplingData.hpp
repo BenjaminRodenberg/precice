@@ -84,14 +84,14 @@ public:
   void overwriteValuesAtWindowEnd(Eigen::VectorXd data);
 
   /**
-   * @brief clears _timeStepsStorage. Called after data was written or before data is received.
+   * @brief clears CouplingData::timeStepsStorage(). Called after data was written or before data is received.
    */
   void clearTimeStepsStorage();
 
-  /// moves _timeStepsStorage. Called after converged data was received.
+  /// moves CouplingData::timeStepsStorage(). Called after converged data was received.
   void moveTimeStepsStorage(); // @todo very easy to mix up with moveToNextWindow. Try to rename or merge!
 
-  /// stores data at key relativeDt in _timeStepsStorage for later use.
+  /// stores data at key relativeDt in CouplingData::timeStepsStorage() for later use.
   void storeValuesAtTime(double relativeDt, Eigen::VectorXd data, bool mustOverwriteExisting = false);
 
   /// stores data for a given key into _data. Assumes that this data exists under the key.
@@ -127,9 +127,6 @@ private:
 
   /// Extrapolation associated with this CouplingData
   cplscheme::impl::Extrapolation _extrapolation;
-
-  /// Stores time steps in the current time window
-  time::Storage _timeStepsStorage;
 };
 
 } // namespace cplscheme

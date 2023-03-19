@@ -6,6 +6,7 @@
 
 #include "logging/Logger.hpp"
 #include "precice/types.hpp"
+#include "time/Storage.hpp"
 
 namespace precice {
 namespace mesh {
@@ -63,6 +64,9 @@ public:
   /// Returns a const reference to the gradient data values.
   const Eigen::MatrixXd &gradientValues() const;
 
+  /// Returns a reference to the data values.
+  time::Storage &timeStepsStorage();
+
   /// Returns the name of the data set, as set in the config file.
   const std::string &getName() const;
 
@@ -90,6 +94,9 @@ private:
   Eigen::VectorXd _values;
 
   Eigen::MatrixXd _gradientValues;
+
+  /// Stores time steps in the current time window
+  time::Storage _timeStepsStorage;
 
   /// Name of the data set.
   std::string _name;
