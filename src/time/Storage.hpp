@@ -107,8 +107,15 @@ public:
   void clear(bool keepWindowStart = true);
 
 private:
-  /// Stores values on the current window associated with normalized dt.
-  std::vector<std::pair<double, Eigen::VectorXd>> _sampleStorage;
+  /// @brief Sample containing timestamped data values
+  struct Sample {
+    double          timestamp;
+    Eigen::VectorXd values;
+    // Eigen::MatrixXd gradient;  // @todo also store gradients here.
+  };
+
+  /// Stores Samples on the current window
+  std::vector<Sample> _sampleStorage;
 
   mutable logging::Logger _log{"time::Storage"};
 };

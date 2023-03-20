@@ -15,15 +15,15 @@ Storage::Storage()
 
 void Storage::initialize(Eigen::VectorXd values)
 {
-  _sampleStorage.emplace_back(std::make_pair(WINDOW_START, values));
-  _sampleStorage.emplace_back(std::make_pair(WINDOW_END, values));
+  _sampleStorage.emplace_back(Sample{WINDOW_START, values});
+  _sampleStorage.emplace_back(Sample{WINDOW_END, values});
 }
 
 Eigen::VectorXd Storage::getValuesAtTime(double time)
 {
   for (auto &sample : _sampleStorage) {
-    if (math::equals(sample.first, time)) {
-      return sample.second;
+    if (math::equals(sample.timestamp, time)) {
+      return sample.values;
     }
   }
   PRECICE_ASSERT(false, "no values found!", time);
@@ -34,14 +34,14 @@ void Storage::setValuesAtTime(double time, Eigen::VectorXd values)
   PRECICE_ASSERT(math::smallerEquals(WINDOW_START, time), "Setting values outside of valid range!");
   PRECICE_ASSERT(math::smallerEquals(time, WINDOW_END), "Sampling outside of valid range!");
   // check if key "time" exists.
-  auto sample = std::find_if(_sampleStorage.begin(), _sampleStorage.end(), [&time](const auto &s) { return math::equals(s.first, time); });
+  auto sample = std::find_if(_sampleStorage.begin(), _sampleStorage.end(), [&time](const auto &s) { return math::equals(s.timestamp, time); });
   if (sample == _sampleStorage.end()) { // key does not exist yet
     PRECICE_ASSERT(math::smaller(maxStoredNormalizedDt(), time), maxStoredNormalizedDt(), time, "Trying to write values with a time that is too small. Please use clear(), if you want to reset the storage.");
-    _sampleStorage.emplace_back(std::make_pair(time, values));
+    _sampleStorage.emplace_back(Sample{time, values});
   } else { // overwrite values at "time"
     for (auto &sample : _sampleStorage) {
-      if (math::equals(sample.first, time)) {
-        sample.second = values;
+      if (math::equals(sample.timestamp, time)) {
+        sample.values = values;
         return;
       }
     }
@@ -54,7 +54,7 @@ double Storage::maxStoredNormalizedDt()
   if (_sampleStorage.size() == 0) {
     return -1; // invalid return
   } else {
-    return _sampleStorage.back().first;
+    return _sampleStorage.back().timestamp;
   }
 }
 
@@ -66,13 +66,13 @@ int Storage::nTimes()
 int Storage::nDofs()
 {
   PRECICE_ASSERT(_sampleStorage.size() > 0);
-  return _sampleStorage[0].second.size();
+  return _sampleStorage[0].values.size();
 }
 
 void Storage::move()
 {
   PRECICE_ASSERT(nTimes() > 0);
-  auto initialGuess = _sampleStorage.back().second; // use values at end of window as initial guess for next
+  auto initialGuess = _sampleStorage.back().values; // use values at end of window as initial guess for next
   _sampleStorage.clear();
   initialize(initialGuess);
 }
@@ -81,9 +81,9 @@ void Storage::clear(bool keepWindowStart)
 {
   if (keepWindowStart) {
     PRECICE_ASSERT(nTimes() > 0, "Storage does not contain any data!");
-    Eigen::VectorXd keep = _sampleStorage.front().second; // we keep data at _storageDict[0.0]
+    Sample keep = _sampleStorage.front();
     _sampleStorage.clear();
-    _sampleStorage.emplace_back(std::make_pair(WINDOW_START, keep));
+    _sampleStorage.emplace_back(keep);
   } else {
     _sampleStorage.clear();
   }
@@ -91,17 +91,17 @@ void Storage::clear(bool keepWindowStart)
 
 Eigen::VectorXd Storage::getValuesAtOrAfter(double before)
 {
-  auto sample = std::find_if(_sampleStorage.begin(), _sampleStorage.end(), [&before](const auto &s) { return math::greaterEquals(s.first, before); });
+  auto sample = std::find_if(_sampleStorage.begin(), _sampleStorage.end(), [&before](const auto &s) { return math::greaterEquals(s.timestamp, before); });
   PRECICE_ASSERT(sample != _sampleStorage.end(), "no values found!");
 
-  return sample->second;
+  return sample->values;
 }
 
 Eigen::VectorXd Storage::getTimes()
 {
   auto times = Eigen::VectorXd(nTimes());
   for (int i = 0; i < times.size(); i++) {
-    times[i] = _sampleStorage[i].first;
+    times[i] = _sampleStorage[i].timestamp;
   }
   return times;
 }
@@ -111,8 +111,8 @@ std::pair<Eigen::VectorXd, Eigen::MatrixXd> Storage::getTimesAndValues()
   auto times  = Eigen::VectorXd(nTimes());
   auto values = Eigen::MatrixXd(nDofs(), nTimes());
   for (int i = 0; i < times.size(); i++) {
-    times[i]      = _sampleStorage[i].first;
-    values.col(i) = _sampleStorage[i].second;
+    times[i]      = _sampleStorage[i].timestamp;
+    values.col(i) = _sampleStorage[i].values;
   }
   return std::make_pair(times, values);
 }
