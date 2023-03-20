@@ -180,8 +180,7 @@ void BiCouplingScheme::storeReceiveData(double relativeDt)
   PRECICE_ASSERT(math::greaterEquals(relativeDt, time::Storage::WINDOW_START), relativeDt);
   PRECICE_ASSERT(math::greaterEquals(time::Storage::WINDOW_END, relativeDt), relativeDt);
   for (auto &receiveData : getReceiveData() | boost::adaptors::map_values) {
-    bool mustOverride = true;
-    receiveData->storeValuesAtTime(relativeDt, receiveData->values(), mustOverride);
+    receiveData->storeValuesAtTime(relativeDt, receiveData->values());
   }
 }
 

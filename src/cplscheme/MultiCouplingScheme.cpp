@@ -162,8 +162,7 @@ void MultiCouplingScheme::storeReceiveData(double relativeDt)
   }
 
   for (auto &receiveData : uniqueReceiveData | boost::adaptors::map_values) {
-    bool mustOverride = true;
-    receiveData->storeValuesAtTime(relativeDt, receiveData->values(), mustOverride);
+    receiveData->storeValuesAtTime(relativeDt, receiveData->values());
   }
 }
 

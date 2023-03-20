@@ -783,8 +783,7 @@ void BaseCouplingScheme::doImplicitStep()
       //   data->storeValuesAtTime(time::Storage::WINDOW_END, data->values(), mustOverwrite);
       // }
       for (auto &pair : getAccelerationData()) {
-        bool mustOverwrite = true;
-        pair.second->storeValuesAtTime(time::Storage::WINDOW_END, pair.second->values(), mustOverwrite);
+        pair.second->storeValuesAtTime(time::Storage::WINDOW_END, pair.second->values());
       }
     }
   }

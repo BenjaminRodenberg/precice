@@ -156,12 +156,12 @@ void CouplingData::moveTimeStepsStorage()
   _data->timeStepsStorage().move();
 }
 
-void CouplingData::storeValuesAtTime(double relativeDt, Eigen::VectorXd data, bool mustOverwriteExisting)
+void CouplingData::storeValuesAtTime(double relativeDt, Eigen::VectorXd data)
 {
   PRECICE_ASSERT(math::greaterEquals(relativeDt, time::Storage::WINDOW_START), relativeDt);
   PRECICE_ASSERT(math::greaterEquals(relativeDt, _data->timeStepsStorage().maxStoredNormalizedDt()), relativeDt, _data->timeStepsStorage().maxStoredNormalizedDt());
   PRECICE_ASSERT(math::greaterEquals(time::Storage::WINDOW_END, relativeDt), relativeDt);
-  _data->timeStepsStorage().setValuesAtTime(relativeDt, data, mustOverwriteExisting);
+  _data->timeStepsStorage().setValuesAtTime(relativeDt, data);
 }
 
 Eigen::VectorXd CouplingData::getValuesAtTime(double relativeDt)
