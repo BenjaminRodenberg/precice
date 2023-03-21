@@ -88,6 +88,9 @@ public:
   /// Returns the dimension (i.e., number of components) of one data value (i.e number of columns of one gradient data value).
   int getDimensions() const;
 
+  /// @brief Allocates memory for the data values and corresponding gradient values.
+  void allocateValues(int expectedCount);
+
 private:
   logging::Logger _log{"mesh::Data"};
 
