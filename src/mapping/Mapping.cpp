@@ -101,15 +101,24 @@ void Mapping::map(int inputDataID,
   PRECICE_ASSERT(output()->data(outputDataID)->values().size() / output()->data(outputDataID)->getDimensions() == static_cast<int>(output()->vertices().size()),
                  output()->data(outputDataID)->values().size(), output()->data(outputDataID)->getDimensions(), output()->vertices().size());
 
-  if (hasConstraint(CONSERVATIVE)) {
-    mapConservative(inputDataID, outputDataID);
-  } else if (hasConstraint(CONSISTENT)) {
-    mapConsistent(inputDataID, outputDataID);
-  } else if (isScaledConsistent()) {
-    mapConsistent(inputDataID, outputDataID);
-    scaleConsistentMapping(inputDataID, outputDataID, getConstraint());
-  } else {
-    PRECICE_UNREACHABLE("Unknown mapping constraint.")
+  auto mappedTimes = input()->data(inputDataID)->timeStepsStorage().getTimes();
+
+  for (int sampleID = 0; sampleID < mappedTimes.size(); sampleID++) {
+    auto timestamp                       = mappedTimes[sampleID];
+    input()->data(inputDataID)->values() = input()->data(inputDataID)->timeStepsStorage().getValuesAtTime(timestamp);
+
+    if (hasConstraint(CONSERVATIVE)) {
+      mapConservative(inputDataID, outputDataID);
+    } else if (hasConstraint(CONSISTENT)) {
+      mapConsistent(inputDataID, outputDataID);
+    } else if (isScaledConsistent()) {
+      mapConsistent(inputDataID, outputDataID);
+      scaleConsistentMapping(inputDataID, outputDataID, getConstraint());
+    } else {
+      PRECICE_UNREACHABLE("Unknown mapping constraint.")
+    }
+
+    output()->data(outputDataID)->timeStepsStorage().setValuesAtTime(timestamp, output()->data(outputDataID)->values());
   }
 }
 

@@ -219,6 +219,18 @@ double CompositionalCouplingScheme::getTimeWindowSize() const
   return timeWindowSize;
 }
 
+double CompositionalCouplingScheme::getComputedTimeWindowPart() const
+{
+  PRECICE_TRACE();
+  auto   schemes        = allSchemes();
+  double timeWindowPart = std::transform_reduce(
+      schemes.begin(), schemes.end(), std::numeric_limits<double>::max(),
+      ::min<double>,
+      std::mem_fn(&CouplingScheme::getComputedTimeWindowPart));
+  PRECICE_DEBUG("return {}", timeWindowPart);
+  return timeWindowPart;
+}
+
 double CompositionalCouplingScheme::getNextTimestepMaxLength() const
 {
   PRECICE_TRACE();

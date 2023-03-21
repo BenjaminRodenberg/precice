@@ -162,6 +162,12 @@ public:
   double getTimeWindowSize() const final override;
 
   /**
+   * @brief Getter for _computedTimeWindowPart
+   * @returns _computedTimeWindowPart
+   */
+  double getComputedTimeWindowPart() const final override;
+
+  /**
    * @brief Returns the maximal length of the next timestep to be computed.
    *
    * If no timestep length is prescribed by the coupling scheme, always the

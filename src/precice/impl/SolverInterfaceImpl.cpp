@@ -342,6 +342,10 @@ double SolverInterfaceImpl::initialize()
 
   _meshLock.lockAll();
 
+  for (auto &context : _accessor->writeDataContexts()) {
+    context.storeWriteSampleAt(time::Storage::WINDOW_START);
+  }
+
   if (_couplingScheme->sendsInitializedData()) {
     performDataActions({action::Action::WRITE_MAPPING_PRIOR}, 0.0);
     mapWrittenData();
@@ -353,8 +357,7 @@ double SolverInterfaceImpl::initialize()
   _couplingScheme->initialize(time, timeWindow);
 
   performDataActions({action::Action::READ_MAPPING_PRIOR}, 0.0);
-  std::vector<double> receiveTimes{time::Storage::WINDOW_START, time::Storage::WINDOW_END};
-  mapReadData(receiveTimes);
+  mapReadData();
   performDataActions({action::Action::READ_MAPPING_POST}, 0.0);
 
   resetWrittenData();
@@ -406,6 +409,11 @@ double SolverInterfaceImpl::advance(
   // Current time
   double time = _couplingScheme->getTime();
 
+  double relativeDt = _couplingScheme->getComputedTimeWindowPart() / _couplingScheme->getTimeWindowSize();
+  for (auto &context : _accessor->writeDataContexts()) {
+    context.storeWriteSampleAt(relativeDt);
+  }
+
   if (_couplingScheme->willDataBeExchanged(0.0)) {
     performDataActions({action::Action::WRITE_MAPPING_PRIOR}, time);
     mapWrittenData();
@@ -422,8 +430,7 @@ double SolverInterfaceImpl::advance(
 
   if (_couplingScheme->hasDataBeenReceived()) {
     performDataActions({action::Action::READ_MAPPING_PRIOR}, time);
-    std::vector<double> receiveTimes{time::Storage::WINDOW_END};
-    mapReadData(receiveTimes);
+    mapReadData();
     performDataActions({action::Action::READ_MAPPING_POST}, time);
   }
 
@@ -971,8 +978,7 @@ void SolverInterfaceImpl::writeBlockVectorData(
                 context.getDataName());
   PRECICE_VALIDATE_DATA(values, size * _dimensions);
 
-  auto &     valuesInternal = context.providedData()->values();
-  const auto vertexCount    = valuesInternal.size() / context.getDataDimensions();
+  const auto vertexCount = context.getDataSize() / context.getDataDimensions();
   for (int i = 0; i < size; i++) {
     const auto valueIndex = valueIndices[i];
     PRECICE_CHECK(0 <= valueIndex && valueIndex < vertexCount,
@@ -981,9 +987,9 @@ void SolverInterfaceImpl::writeBlockVectorData(
     const int offsetInternal = valueIndex * _dimensions;
     const int offset         = i * _dimensions;
     for (int dim = 0; dim < _dimensions; dim++) {
-      PRECICE_ASSERT(offset + dim < valuesInternal.size(),
-                     offset + dim, valuesInternal.size());
-      valuesInternal[offsetInternal + dim] = values[offset + dim];
+      PRECICE_ASSERT(offset + dim < context.getDataSize(),
+                     offset + dim, context.getDataSize());
+      context.writeIntoDataBuffer(offsetInternal + dim, values[offset + dim]);
     }
   }
 }
@@ -1005,14 +1011,13 @@ void SolverInterfaceImpl::writeVectorData(
                 context.getDataName());
   PRECICE_VALIDATE_DATA(value, _dimensions);
 
-  auto &     values      = context.providedData()->values();
-  const auto vertexCount = values.size() / context.getDataDimensions();
+  const auto vertexCount = context.getDataSize() / context.getDataDimensions();
   PRECICE_CHECK(0 <= valueIndex && valueIndex < vertexCount,
                 "Cannot write data \"{}\" to invalid Vertex ID ({}). Please make sure you only use the results from calls to setMeshVertex/Vertices().",
                 context.getDataName(), valueIndex);
   const int offset = valueIndex * _dimensions;
   for (int dim = 0; dim < _dimensions; dim++) {
-    values[offset + dim] = value[dim];
+    context.writeIntoDataBuffer(offset + dim, value[dim]);
   }
 }
 
@@ -1037,14 +1042,13 @@ void SolverInterfaceImpl::writeBlockScalarData(
                 context.getDataName(), context.getDataName());
   PRECICE_VALIDATE_DATA(values, size);
 
-  auto &     valuesInternal = context.providedData()->values();
-  const auto vertexCount    = valuesInternal.size() / context.getDataDimensions();
+  const auto vertexCount = context.getDataSize() / context.getDataDimensions();
   for (int i = 0; i < size; i++) {
     const auto valueIndex = valueIndices[i];
     PRECICE_CHECK(0 <= valueIndex && valueIndex < vertexCount,
                   "Cannot write data \"{}\" to invalid Vertex ID ({}). Please make sure you only use the results from calls to setMeshVertex/Vertices().",
                   context.getDataName(), valueIndex);
-    valuesInternal[valueIndex] = values[i];
+    context.writeIntoDataBuffer(valueIndex, values[i]);
   }
 }
 
@@ -1069,13 +1073,12 @@ void SolverInterfaceImpl::writeScalarData(
                 context.getDataName());
   PRECICE_VALIDATE_DATA(static_cast<double *>(&value), 1);
 
-  auto &     values      = context.providedData()->values();
-  const auto vertexCount = values.size() / context.getDataDimensions();
+  const auto vertexCount = context.getDataSize() / context.getDataDimensions();
   PRECICE_CHECK(0 <= valueIndex && valueIndex < vertexCount,
                 "Cannot write data \"{}\" to invalid Vertex ID ({}). "
                 "Please make sure you only use the results from calls to setMeshVertex/Vertices().",
                 context.getDataName(), valueIndex);
-  values[valueIndex] = value;
+  context.writeIntoDataBuffer(valueIndex, value);
 
   PRECICE_DEBUG("Written scalar value = {}", value);
 }
@@ -1111,7 +1114,7 @@ void SolverInterfaceImpl::writeScalarGradientData(
     PRECICE_VALIDATE_DATA(gradientValues, _dimensions);
 
     // Gets the gradientvalues matrix corresponding to the dataID
-    auto &     gradientValuesInternal = meshData.gradientValues();
+    auto &     gradientValuesInternal = meshData.gradientValues(); // @todo provide similar implementation like for context.writeDataBuffer()
     const auto vertexCount            = gradientValuesInternal.cols() / context.getDataDimensions();
 
     // Check if the index and dimensions are valid
@@ -1175,7 +1178,7 @@ void SolverInterfaceImpl::writeBlockScalarGradientData(
     PRECICE_VALIDATE_DATA(gradientValues, size * _dimensions);
 
     // Get gradient data and check if initialized
-    auto &     gradientValuesInternal = meshData.gradientValues();
+    auto &     gradientValuesInternal = meshData.gradientValues(); // @todo provide similar implementation like for context.writeDataBuffer()
     const auto vertexCount            = gradientValuesInternal.cols() / context.getDataDimensions();
 
     Eigen::Map<const Eigen::MatrixXd> gradients(gradientValues, _dimensions, size);
@@ -1223,7 +1226,7 @@ void SolverInterfaceImpl::writeVectorGradientData(
 
     PRECICE_VALIDATE_DATA(gradientValues, _dimensions * _dimensions);
 
-    auto &     gradientValuesInternal = meshData.gradientValues();
+    auto &     gradientValuesInternal = meshData.gradientValues(); // @todo provide similar implementation like for context.writeDataBuffer()
     const auto vertexCount            = gradientValuesInternal.cols() / meshData.getDimensions();
 
     // Check if the index is valid
@@ -1279,7 +1282,7 @@ void SolverInterfaceImpl::writeBlockVectorGradientData(
     PRECICE_VALIDATE_DATA(gradientValues, size * _dimensions * _dimensions);
 
     // Get the gradient data and check if initialized
-    auto &     gradientValuesInternal = meshData.gradientValues();
+    auto &     gradientValuesInternal = meshData.gradientValues(); // @todo provide similar implementation like for context.writeDataBuffer()
     const auto vertexCount            = gradientValuesInternal.cols() / meshData.getDimensions();
 
     const Eigen::Index                dims{_dimensions};
@@ -1427,7 +1430,7 @@ void SolverInterfaceImpl::readVectorDataImpl(
                 "You cannot call readVectorData on the scalar data type \"{0}\". Use readScalarData or change the data type for \"{0}\" to vector.",
                 context.getDataName());
   const auto values      = context.sampleWaveformAt(normalizedReadTime);
-  const auto vertexCount = values.size() / context.getDataDimensions();
+  const auto vertexCount = context.getDataSize() / context.getDataDimensions();
   PRECICE_CHECK(0 <= valueIndex && valueIndex < vertexCount,
                 "Cannot read data \"{}\" to invalid Vertex ID ({}). "
                 "Please make sure you only use the results from calls to setMeshVertex/Vertices().",
@@ -1570,7 +1573,7 @@ void SolverInterfaceImpl::readScalarDataImpl(
                 context.getDataName());
 
   const auto values      = context.sampleWaveformAt(normalizedReadTime);
-  const auto vertexCount = values.size();
+  const auto vertexCount = context.getDataSize();
   PRECICE_CHECK(0 <= valueIndex && valueIndex < vertexCount,
                 "Cannot read data \"{}\" from invalid Vertex ID ({}). "
                 "Please make sure you only use the results from calls to setMeshVertex/Vertices().",
@@ -1826,19 +1829,14 @@ void SolverInterfaceImpl::mapWrittenData()
   }
 }
 
-void SolverInterfaceImpl::mapReadData(std::vector<double> receiveTimes)
+void SolverInterfaceImpl::mapReadData()
 {
   PRECICE_TRACE();
   computeMappings(_accessor->readMappingContexts(), "read");
-  for (auto time : receiveTimes) {
-    _couplingScheme->loadReceiveDataFromStorage(time); // @todo loads data into ALL read data. Would be better to only perform this for read data with name context.getDataName
-    for (auto &context : _accessor->readDataContexts()) {
-      // context.retreiveTimeStepData(time);  // @todo try to retrieve data via context. But complicated: DataContext needs a connection to associated CouplingData...
-      if (context.hasMapping()) {
-        PRECICE_DEBUG("Map read data \"{}\" to mesh \"{}\"", context.getDataName(), context.getMeshName());
-        context.mapData();
-      }
-      context.storeDataInWaveform(time);
+  for (auto &context : _accessor->readDataContexts()) {
+    if (context.hasMapping()) {
+      PRECICE_DEBUG("Map read data \"{}\" to mesh \"{}\"", context.getDataName(), context.getMeshName());
+      context.mapData();
     }
   }
 }

@@ -385,7 +385,7 @@ bool BaseCouplingScheme::hasDataBeenReceived() const
   return _hasDataBeenReceived;
 }
 
-double BaseCouplingScheme::getComputedTimeWindowPart()
+double BaseCouplingScheme::getComputedTimeWindowPart() const
 {
   return _computedTimeWindowPart;
 }

@@ -141,6 +141,12 @@ public:
   double getTimeWindowSize() const override final;
 
   /**
+   * @brief Getter for _computedTimeWindowPart
+   * @returns _computedTimeWindowPart
+   */
+  double getComputedTimeWindowPart() const override final;
+
+  /**
    * @brief Returns the maximal length of the next timestep to be computed.
    *
    * If no time window size is prescribed by the coupling scheme, always the
@@ -288,12 +294,6 @@ protected:
    * @param timeWindowSize
    */
   void setTimeWindowSize(double timeWindowSize);
-
-  /**
-   * @brief Getter for _computedTimeWindowPart
-   * @returns _computedTimeWindowPart
-   */
-  double getComputedTimeWindowPart();
 
   /**
    * @brief Setter for _doesFirstStep

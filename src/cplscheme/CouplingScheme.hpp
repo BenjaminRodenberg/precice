@@ -195,6 +195,12 @@ public:
   virtual double getTimeWindowSize() const = 0;
 
   /**
+   * @brief Getter for _computedTimeWindowPart
+   * @returns _computedTimeWindowPart
+   */
+  virtual double getComputedTimeWindowPart() const = 0;
+
+  /**
    * @brief Returns the maximal length of the next timestep to be computed.
    *
    * If no time window size is prescribed by the coupling scheme, always the

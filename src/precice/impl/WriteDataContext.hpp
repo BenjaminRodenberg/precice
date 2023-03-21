@@ -16,6 +16,14 @@ namespace impl {
 class WriteDataContext : public DataContext {
 public:
   /**
+   * @brief A sample of coupling data without a timestamp
+   */
+  struct WriteSample {
+    Eigen::VectorXd values;
+    // Eigen::MatrixXd gradient;  // @todo also store gradients here.
+  };
+
+  /**
    * @brief Construct a new WriteDataContext object without a mapping.
    *
    * @param data Data associated with this WriteDataContext.
@@ -33,6 +41,21 @@ public:
   mesh::PtrData providedData();
 
   /**
+   * @brief Store data in _writeDataBuffer
+   *
+   * @param[in] index id of data
+   * @param[in] value value of data
+   */
+  void writeIntoDataBuffer(int index, double value);
+
+  /**
+   * @brief Store data from _writeDataBuffer at relativeDt in providedData().timeStepsStorage()
+   *
+   * @param[in] relativeDt timestamp associated with data in buffer
+   */
+  void storeWriteSampleAt(double relativeDt);
+
+  /**
    * @brief Adds a MappingContext and the MeshContext required by the write mapping to the corresponding WriteDataContext data structures.
    *
    * A write mapping maps _providedData to _toData. A WriteDataContext already has _providedData, but additionally requires _toData.
@@ -44,6 +67,9 @@ public:
 
 private:
   static logging::Logger _log;
+
+  /// @brief Buffer to store written data until it is copied to _providedData->timeStepsStorage()
+  WriteSample _writeDataBuffer;
 };
 
 } // namespace impl
