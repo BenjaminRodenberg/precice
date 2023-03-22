@@ -165,6 +165,8 @@ protected:
   virtual void mapConsistent(DataID inputDataID, DataID outputDataID) = 0;
 
 private:
+  mutable logging::Logger _log{"mapping::"};
+
   /// Determines whether mapping is consistent or conservative.
   Constraint _constraint;
 

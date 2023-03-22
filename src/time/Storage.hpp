@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include "logging/Logger.hpp"
+#include "time/Stample.hpp"
 
 namespace precice::time {
 
@@ -107,15 +108,8 @@ public:
   void clear(bool keepWindowStart = true);
 
 private:
-  /// @brief Sample containing timestamped data values
-  struct Sample {
-    double          timestamp;
-    Eigen::VectorXd values;
-    // Eigen::MatrixXd gradient;  // @todo also store gradients here.
-  };
-
-  /// Stores Samples on the current window
-  std::vector<Sample> _sampleStorage;
+  /// Stores Stamples on the current window
+  std::vector<Stample> _sampleStorage;
 
   mutable logging::Logger _log{"time::Storage"};
 };

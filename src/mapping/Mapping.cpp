@@ -96,16 +96,19 @@ void Mapping::map(int inputDataID,
                  getDimensions(), output()->getDimensions());
   PRECICE_ASSERT(input()->data(inputDataID)->getDimensions() == output()->data(outputDataID)->getDimensions(),
                  input()->data(inputDataID)->getDimensions(), output()->data(outputDataID)->getDimensions());
-  PRECICE_ASSERT(input()->data(inputDataID)->values().size() / input()->data(inputDataID)->getDimensions() == static_cast<int>(input()->vertices().size()),
-                 input()->data(inputDataID)->values().size(), input()->data(inputDataID)->getDimensions(), input()->vertices().size());
-  PRECICE_ASSERT(output()->data(outputDataID)->values().size() / output()->data(outputDataID)->getDimensions() == static_cast<int>(output()->vertices().size()),
-                 output()->data(outputDataID)->values().size(), output()->data(outputDataID)->getDimensions(), output()->vertices().size());
 
   auto mappedTimes = input()->data(inputDataID)->timeStepsStorage().getTimes();
 
+  bool hasData = output()->data(outputDataID)->timeStepsStorage().nTimes() > 0;
+  output()->data(outputDataID)->timeStepsStorage().clear(hasData);
+
   for (int sampleID = 0; sampleID < mappedTimes.size(); sampleID++) {
-    auto timestamp                       = mappedTimes[sampleID];
+    auto timestamp = mappedTimes[sampleID];
+    PRECICE_DEBUG("Mapping {} at timestamp {}.", input()->data(inputDataID)->getName(), timestamp);
     input()->data(inputDataID)->values() = input()->data(inputDataID)->timeStepsStorage().getValuesAtTime(timestamp);
+
+    PRECICE_ASSERT(input()->data(inputDataID)->values().size() / input()->data(inputDataID)->getDimensions() == static_cast<int>(input()->vertices().size()),
+                   input()->data(inputDataID)->values().size(), input()->data(inputDataID)->getDimensions(), input()->vertices().size());
 
     if (hasConstraint(CONSERVATIVE)) {
       mapConservative(inputDataID, outputDataID);
@@ -117,6 +120,9 @@ void Mapping::map(int inputDataID,
     } else {
       PRECICE_UNREACHABLE("Unknown mapping constraint.")
     }
+
+    PRECICE_ASSERT(output()->data(outputDataID)->values().size() / output()->data(outputDataID)->getDimensions() == static_cast<int>(output()->vertices().size()),
+                   output()->data(outputDataID)->values().size(), output()->data(outputDataID)->getDimensions(), output()->vertices().size());
 
     output()->data(outputDataID)->timeStepsStorage().setValuesAtTime(timestamp, output()->data(outputDataID)->values());
   }

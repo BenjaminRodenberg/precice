@@ -4,6 +4,7 @@
 
 #include "DataContext.hpp"
 #include "logging/Logger.hpp"
+#include "time/Sample.hpp"
 
 namespace precice {
 namespace impl {
@@ -15,14 +16,6 @@ namespace impl {
  */
 class WriteDataContext : public DataContext {
 public:
-  /**
-   * @brief A sample of coupling data without a timestamp
-   */
-  struct WriteSample {
-    Eigen::VectorXd values;
-    // Eigen::MatrixXd gradient;  // @todo also store gradients here.
-  };
-
   /**
    * @brief Construct a new WriteDataContext object without a mapping.
    *
@@ -69,7 +62,7 @@ private:
   static logging::Logger _log;
 
   /// @brief Buffer to store written data until it is copied to _providedData->timeStepsStorage()
-  WriteSample _writeDataBuffer;
+  time::Sample _writeDataBuffer;
 };
 
 } // namespace impl
