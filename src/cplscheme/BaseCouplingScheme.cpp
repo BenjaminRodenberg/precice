@@ -29,6 +29,9 @@
 
 namespace precice::cplscheme {
 
+// if doComm = true, Test  #4: precice.cplscheme takes approx. 3 times as long as for doComm = false. Why?
+static bool doComm = false;
+
 BaseCouplingScheme::BaseCouplingScheme(
     double                        maxTime,
     int                           maxTimeWindows,
@@ -95,6 +98,20 @@ bool BaseCouplingScheme::hasConverged() const
   return _hasConverged;
 }
 
+void BaseCouplingScheme::sendNumberOfTimeSteps(const m2n::PtrM2N &m2n, const int numberOfTimeSteps)
+{
+  PRECICE_TRACE();
+  PRECICE_DEBUG("Sending number or time steps {}...", numberOfTimeSteps);
+  m2n->send(numberOfTimeSteps);
+}
+
+void BaseCouplingScheme::sendTimes(const m2n::PtrM2N &m2n, const Eigen::VectorXd &times)
+{
+  PRECICE_TRACE();
+  PRECICE_DEBUG("Sending times...");
+  m2n->send(times);
+}
+
 void BaseCouplingScheme::sendData(const m2n::PtrM2N &m2n, const DataMap &sendData)
 {
   PRECICE_TRACE();
@@ -105,8 +122,15 @@ void BaseCouplingScheme::sendData(const m2n::PtrM2N &m2n, const DataMap &sendDat
     const auto &stamples = data->stamples();
     PRECICE_ASSERT(stamples.size() > 0);
 
-    const auto serializedValues = data->getSerializedValues();
-    const int  nTimeSteps       = 2;
+    const auto      serializedValues = data->getSerializedValues();
+    const int       nTimeSteps       = 2;
+    Eigen::VectorXd timesAscending(nTimeSteps);
+    timesAscending << time::Storage::WINDOW_START, time::Storage::WINDOW_END;
+
+    if (doComm) {
+      sendNumberOfTimeSteps(m2n, nTimeSteps);
+      sendTimes(m2n, timesAscending);
+    }
 
     // Data is actually only send if size>0, which is checked in the derived classes implementation
     m2n->send(serializedValues, data->getMeshID(), data->getDimensions() * nTimeSteps);
@@ -118,6 +142,25 @@ void BaseCouplingScheme::sendData(const m2n::PtrM2N &m2n, const DataMap &sendDat
   }
 }
 
+int BaseCouplingScheme::receiveNumberOfTimeSteps(const m2n::PtrM2N &m2n)
+{
+  PRECICE_TRACE();
+  PRECICE_DEBUG("Receiving number of time steps...");
+  int numberOfTimeSteps;
+  m2n->receive(numberOfTimeSteps);
+  return numberOfTimeSteps;
+}
+
+Eigen::VectorXd BaseCouplingScheme::receiveTimes(const m2n::PtrM2N &m2n, int nTimeSteps)
+{
+  PRECICE_TRACE();
+  PRECICE_DEBUG("Receiving times....");
+  Eigen::VectorXd times(nTimeSteps);
+  m2n->receive(times);
+  PRECICE_DEBUG("Received times {}", times);
+  return times;
+}
+
 void BaseCouplingScheme::receiveData(const m2n::PtrM2N &m2n, const DataMap &receiveData)
 {
   PRECICE_TRACE();
@@ -125,10 +168,19 @@ void BaseCouplingScheme::receiveData(const m2n::PtrM2N &m2n, const DataMap &rece
   PRECICE_ASSERT(m2n->isConnected());
   for (const auto &data : receiveData | boost::adaptors::map_values) {
 
-    int             nTimeSteps = 2;
-    Eigen::VectorXd timesAscending(nTimeSteps);
-    timesAscending << time::Storage::WINDOW_START, time::Storage::WINDOW_END;
+    int             nTimeSteps;
+    Eigen::VectorXd timesAscending;
+    if (doComm) {
+      nTimeSteps     = receiveNumberOfTimeSteps(m2n);
+      timesAscending = receiveTimes(m2n, nTimeSteps);
+    } else {
+      nTimeSteps     = 2;
+      timesAscending = Eigen::VectorXd(nTimeSteps);
+      timesAscending << time::Storage::WINDOW_START, time::Storage::WINDOW_END;
+    }
+
     Eigen::VectorXd serializedValues(nTimeSteps * data->getSize());
+    PRECICE_ASSERT(nTimeSteps > 0);
 
     // Data is only received on ranks with size>0, which is checked in the derived class implementation
     m2n->receive(serializedValues, data->getMeshID(), data->getDimensions() * nTimeSteps);
