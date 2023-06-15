@@ -106,6 +106,12 @@ void BaseCouplingScheme::sendData(const m2n::PtrM2N &m2n, const DataMap &sendDat
     PRECICE_ASSERT(stamples.size() > 0);
     data->sample() = stamples.back().sample;
 
+    int             nDummyValues = 1;
+    Eigen::VectorXd dummy(nDummyValues);
+    dummy << 42;
+
+    m2n->send(dummy, data->getMeshID(), nDummyValues);
+
     // Data is actually only send if size>0, which is checked in the derived classes implementation
     m2n->send(data->values(), data->getMeshID(), data->getDimensions());
 
@@ -121,6 +127,11 @@ void BaseCouplingScheme::receiveData(const m2n::PtrM2N &m2n, const DataMap &rece
   PRECICE_ASSERT(m2n.get());
   PRECICE_ASSERT(m2n->isConnected());
   for (const auto &data : receiveData | boost::adaptors::map_values) {
+
+    int             nDummyValues = 1;
+    Eigen::VectorXd dummy(nDummyValues);
+    m2n->receive(dummy, data->getMeshID(), nDummyValues);
+
     // Data is only received on ranks with size>0, which is checked in the derived class implementation
     m2n->receive(data->values(), data->getMeshID(), data->getDimensions());
 
