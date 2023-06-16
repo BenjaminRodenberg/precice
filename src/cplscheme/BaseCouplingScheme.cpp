@@ -106,6 +106,9 @@ void BaseCouplingScheme::sendData(const m2n::PtrM2N &m2n, const DataMap &sendDat
     PRECICE_ASSERT(stamples.size() > 0);
     data->sample() = stamples.back().sample;
 
+    bool dummy = true;
+    m2n->send(dummy);
+
     // Data is actually only send if size>0, which is checked in the derived classes implementation
     m2n->send(data->values(), data->getMeshID(), data->getDimensions());
 
@@ -121,6 +124,10 @@ void BaseCouplingScheme::receiveData(const m2n::PtrM2N &m2n, const DataMap &rece
   PRECICE_ASSERT(m2n.get());
   PRECICE_ASSERT(m2n->isConnected());
   for (const auto &data : receiveData | boost::adaptors::map_values) {
+
+    bool dummy = false;
+    m2n->receive(dummy);
+
     // Data is only received on ranks with size>0, which is checked in the derived class implementation
     m2n->receive(data->values(), data->getMeshID(), data->getDimensions());
 
