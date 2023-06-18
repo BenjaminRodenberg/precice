@@ -21,7 +21,9 @@ CouplingData::CouplingData(
 {
   PRECICE_ASSERT(_data != nullptr);
   /// Lazy allocation of _previousIteration.gradient: only used in case the corresponding data has gradients
-  _previousIteration = time::Sample{Eigen::VectorXd::Zero(getSize())};
+  _previousIteration.push_back(time::Stample{time::Storage::WINDOW_START, time::Sample{Eigen::VectorXd::Zero(getSize())}});
+  _previousIteration.push_back(time::Stample{time::Storage::WINDOW_END, time::Sample{Eigen::VectorXd::Zero(getSize())}});
+
   timeStepsStorage().setExtrapolationOrder(extrapolationOrder);
 
   PRECICE_ASSERT(_mesh != nullptr);
@@ -92,23 +94,37 @@ void CouplingData::storeIteration()
 {
   const auto &stamples = this->stamples();
   PRECICE_ASSERT(stamples.size() > 0);
-  this->sample()     = stamples.back().sample;
-  _previousIteration = this->sample();
+
+
+  _previousIteration.clear();
+  for (const auto &stample : stamples) {
+    _previousIteration.push_back(stample);
+  }
+
+  if(stamples.size() > 1) {  // special treatment for first iteration.
+    PRECICE_ASSERT(math::equals(stamples.back().timestamp, time::Storage::WINDOW_END), stamples.back().timestamp);
+  } else {
+    PRECICE_ASSERT(math::equals(_previousIteration.back().timestamp, time::Storage::WINDOW_START), _previousIteration.back().timestamp);
+    _previousIteration.push_back(_previousIteration.back());
+    _previousIteration.back().timestamp = time::Storage::WINDOW_END;
+  }
+
+  this->sample() = stamples.back().sample;
 }
 
 const Eigen::VectorXd CouplingData::previousIteration() const
 {
-  return _previousIteration.values;
+  return _previousIteration.back().sample.values;
 }
 
 const Eigen::MatrixXd &CouplingData::previousIterationGradients() const
 {
-  return _previousIteration.gradients;
+  return _previousIteration.back().sample.gradients;
 }
 
 int CouplingData::getPreviousIterationSize() const
 {
-  return _previousIteration.values.size();
+  return _previousIteration.back().sample.values.size();
 }
 
 int CouplingData::getMeshID()

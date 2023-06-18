@@ -68,6 +68,11 @@ public:
   /// returns data value from previous iteration
   const Eigen::VectorXd previousIteration() const;
 
+  const std::vector<time::Stample> &previousIterationsStamples() const
+  {
+    return _previousIteration;
+  }
+
   /// returns gradient data from previous iteration
   const Eigen::MatrixXd &previousIterationGradients() const;
 
@@ -109,7 +114,7 @@ private:
   }
 
   /// Sample values of previous iteration (end of time window).
-  time::Sample _previousIteration;
+  std::vector<time::Stample> _previousIteration;
 
   /// Data associated with this CouplingData
   mesh::PtrData _data;

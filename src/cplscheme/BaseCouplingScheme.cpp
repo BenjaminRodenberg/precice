@@ -659,13 +659,35 @@ bool BaseCouplingScheme::measureConvergence()
     PRECICE_ASSERT(convMeasure.couplingData != nullptr);
     PRECICE_ASSERT(convMeasure.measure.get() != nullptr);
     PRECICE_ASSERT(convMeasure.couplingData->previousIteration().size() == convMeasure.couplingData->values().size(), convMeasure.couplingData->previousIteration().size(), convMeasure.couplingData->values().size(), convMeasure.couplingData->getDataName());
-    convMeasure.measure->measure(convMeasure.couplingData->previousIteration(), convMeasure.couplingData->values());
+
+
+    const int nStamples = convMeasure.couplingData->previousIterationsStamples().size();
+
+    PRECICE_ASSERT(nStamples > 0);
+
+    bool converged = true;
+
+    if(nStamples > 2) {  // only use new implementation, if we do subcycling
+      PRECICE_ASSERT(convMeasure.couplingData->previousIterationsStamples().size() == convMeasure.couplingData->stamples().size(), convMeasure.couplingData->previousIterationsStamples().size(), convMeasure.couplingData->stamples().size());
+      for (int stampleId = 0; stampleId < nStamples; stampleId++) {
+        const auto &stample                  = convMeasure.couplingData->stamples()[stampleId];
+        const auto &sample                  = stample.sample;
+        const auto &previousIterationSample = convMeasure.couplingData->previousIterationsStamples()[stampleId].sample;
+
+        convMeasure.measure->measure(previousIterationSample.values, sample.values);
+
+        converged &= convMeasure.measure->isConvergence();
+      }
+    } else { //old implementation
+      convMeasure.measure->measure(convMeasure.couplingData->previousIteration(),  convMeasure.couplingData->values());
+      converged = convMeasure.measure->isConvergence();
+    }
 
     if (not utils::IntraComm::isSecondary() && convMeasure.doesLogging) {
       _convergenceWriter->writeData(convMeasure.logHeader(), convMeasure.measure->getNormResidual());
     }
 
-    if (not convMeasure.measure->isConvergence()) {
+    if (not converged) {
       allConverged = false;
       if (convMeasure.strict) {
         oneStrict = true;
