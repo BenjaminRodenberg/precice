@@ -28,7 +28,9 @@ void runTestThreeSolvers(std::string const &config, std::vector<int> expectedCal
     if (precice.requiresInitialData()) {
     }
     precice.initialize();
-    double dt = precice.getMaxTimeStepSize();
+    double maxDt    = precice.getMaxTimeStepSize();
+    double solverDt = .5;
+    double dt       = solverDt > maxDt ? maxDt : solverDt; // determine actual time step size; must fit into remaining time in window
 
     while (precice.isCouplingOngoing()) {
       if (precice.requiresWritingCheckpoint()) {
@@ -50,7 +52,9 @@ void runTestThreeSolvers(std::string const &config, std::vector<int> expectedCal
     if (precice.requiresInitialData()) {
     }
     precice.initialize();
-    double dt = precice.getMaxTimeStepSize();
+    double maxDt    = precice.getMaxTimeStepSize();
+    double solverDt = .5;
+    double dt       = solverDt > maxDt ? maxDt : solverDt; // determine actual time step size; must fit into remaining time in window
 
     while (precice.isCouplingOngoing()) {
       if (precice.requiresWritingCheckpoint()) {
@@ -73,7 +77,9 @@ void runTestThreeSolvers(std::string const &config, std::vector<int> expectedCal
     if (precice.requiresInitialData()) {
     }
     precice.initialize();
-    double dt = precice.getMaxTimeStepSize();
+    double maxDt    = precice.getMaxTimeStepSize();
+    double solverDt = .5;
+    double dt       = solverDt > maxDt ? maxDt : solverDt; // determine actual time step size; must fit into remaining time in window
 
     while (precice.isCouplingOngoing()) {
       if (precice.requiresWritingCheckpoint()) {
