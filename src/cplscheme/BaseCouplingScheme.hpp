@@ -71,8 +71,7 @@ public:
       std::string                   localParticipant,
       int                           maxIterations,
       CouplingMode                  cplMode,
-      constants::TimesteppingMethod dtMethod,
-      int                           extrapolationOrder);
+      constants::TimesteppingMethod dtMethod);
 
   /**
    * @brief Getter for _sendsInitializedData
@@ -136,9 +135,6 @@ public:
    * hasTimeWindowSize().
    */
   double getTimeWindowSize() const override final;
-
-  /// @copydoc CouplingScheme::getNormalizedWindowTime
-  double getNormalizedWindowTime() const override;
 
   /**
    * @brief Returns the maximal size of the next time step to be computed.
@@ -268,6 +264,18 @@ protected:
   void receiveData(const m2n::PtrM2N &m2n, const DataMap &receiveData, bool initialCommunication = false);
 
   /**
+   * @brief Like receiveData, but temporarily sets window time to end of window.
+   *
+   * This function is only needed for SerialCouplingScheme, if substeps="false". Here, a special situation arises for the second participant, because it receives data for the end of the window from the first participant: If substeps="false" only values without timestamps are exchanged. Therefore, getTime() is used to determine the time associated with the values. However, getTime() of the second participant points to the beginning of the window, if we enter a new window. We need to temporarily modify the return value of getTime() to point to the end of the window to be able to store the values at the correct point in time.
+   *
+   * Note: This function could be removed by a) removing the option to turn off exchange of substeps or by b) refactoring the communication such that sent/received values always carry a timestamp.
+   *
+   * @param m2n M2N used for communication
+   * @param receiveData DataMap associated with received data
+   */
+  void receiveDataForWindowEnd(const m2n::PtrM2N &m2n, const DataMap &receiveData);
+
+  /**
    * @brief Initializes storage in receiveData as zero
    *
    * @param receiveData DataMap associated with received data
@@ -291,7 +299,7 @@ protected:
    * @brief Function to determine whether coupling scheme is an explicit coupling scheme
    * @returns true, if coupling scheme is explicit
    */
-  bool isExplicitCouplingScheme();
+  bool isExplicitCouplingScheme() const;
 
   /**
    * @brief Setter for _timeWindowSize
@@ -306,13 +314,6 @@ protected:
   double getComputedTimeWindowPart() const;
 
   /**
-   * @brief Returns the time at the beginning of the current time window.
-   *
-   * @return time at beginning of the current time window.
-   */
-  double getWindowStartTime() const;
-
-  /**
    * @brief Setter for _doesFirstStep
    */
   void setDoesFirstStep(bool doesFirstStep);
@@ -320,7 +321,7 @@ protected:
   /**
    * @brief Used to set flag after data has been received using receiveData().
    */
-  void checkDataHasBeenReceived();
+  void notifyDataHasBeenReceived();
 
   /**
    * @brief Getter for _receivesInitializedData
@@ -448,17 +449,6 @@ private:
   /// Local participant name.
   std::string _localParticipant = "unknown";
 
-  /**
-   * Order of predictor of interface values for first participant.
-   *
-   * When a participant enters a new window, it has to take some initial guess for the interface values at the end of the window computed by the other participants.
-   * There are two possibilities to determine an initial guess:
-   *
-   * 1) Simply use the converged values of the last time window (constant extrapolation).
-   * 2) Compute a linear function from the values of the last two time windows and use it to determine the initial guess (linear extrapolation)
-   */
-  int _extrapolationOrder;
-
   /// Smallest number, taking validDigits into account: eps = std::pow(10.0, -1 * validDigits)
   const double _eps;
 
@@ -527,7 +517,7 @@ private:
    * @brief Function to check whether end of time window is reached. Does not check for convergence
    * @returns true if end time of time window is reached.
    */
-  bool reachedEndOfTimeWindow();
+  bool reachedEndOfTimeWindow() const;
 
   /**
    * @brief Initialize txt writers for iterations and convergence tracking

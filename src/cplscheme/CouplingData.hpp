@@ -16,8 +16,7 @@ public:
       mesh::PtrData data,
       mesh::PtrMesh mesh,
       bool          requiresInitialization,
-      bool          exchangeSubsteps,
-      int           extrapolationOrder);
+      bool          exchangeSubsteps);
 
   int getDimensions() const;
 
@@ -43,6 +42,11 @@ public:
 
   /// Returns a reference to the time step storage of the data.
   time::Storage &timeStepsStorage();
+
+  /// returns previous data interpolated to the relativeDt time
+  Eigen::VectorXd getPreviousValuesAtTime(double relativeDt);
+
+  Eigen::MatrixXd getPreviousGradientsAtTime(double relativeDt);
 
   /// Returns a const reference to the time step storage of the data.
   const time::Storage &timeStepsStorage() const;
@@ -104,7 +108,7 @@ private:
   mesh::PtrData _data;
 
   /// Sample values of previous iteration (end of time window).
-  time::Sample _previousIteration;
+  time::Storage _previousTimeStepsStorage;
 
   /// If true, all substeps will be sent / received for this coupling data
   bool _exchangeSubsteps;

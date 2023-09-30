@@ -49,9 +49,6 @@ public:
   /// To be used, when the time window size is determined dynamically during the coupling.
   static const double UNDEFINED_TIME_WINDOW_SIZE;
 
-  /// To be used, when the extrapolation order is not defined (for explicit coupling).
-  static const int UNDEFINED_EXTRAPOLATION_ORDER;
-
   /// To be used, when the number of max iterations is not defined (for explicit coupling).
   static const int UNDEFINED_MAX_ITERATIONS;
 
@@ -184,15 +181,6 @@ public:
    * hasTimeWindowSize().
    */
   virtual double getTimeWindowSize() const = 0;
-
-  /**
-   * @brief Returns the normalized time within the current time window.
-   *
-   * TODO: Where do we define what the normalized time is? Refer this part in the docs!
-   *
-   * @return time normalized to [0,1] w.r.t current time window.
-   */
-  virtual double getNormalizedWindowTime() const = 0;
 
   /**
    * @brief Returns the maximal size of the next time step to be computed.

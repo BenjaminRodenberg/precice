@@ -36,7 +36,7 @@ set(CPACK_PACKAGE_CONTACT "The precice developers <precice@mailman.informatik.un
 set(CPACK_PACKAGE_DESCRIPTION "preCICE (Precise Code Interaction Coupling Environment) is a coupling library for partitioned multi-physics simulations, including, but not restricted to fluid-structure interaction and conjugate heat transfer simulations. Partitioned means that preCICE couples existing programs (solvers) capable of simulating a subpart of the complete physics involved in a simulation. This allows for the high flexibility that is needed to keep a decent time-to-solution for complex multi-physics scenarios.")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Precise Code Interaction Coupling Environment")
 set(CPACK_PACKAGE_EXECUTABLES "testprecice;precice-tools")
-set(CPACK_PACKAGE_HOMEPAGE_URL "www.precice.org")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://precice.org")
 #set(CPACK_PACKAGE_ICON "")
 set(CPACK_PACKAGE_CHECKSUM "SHA256")
 set(CPACK_RESOURCE_FILE_LICENSE "${preCICE_SOURCE_DIR}/LICENSE")
@@ -72,6 +72,9 @@ if(PRECICE_PETScMapping)
   set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, petsc-dev (>= 3.6)")
 endif()
 
+# Suggest installing python for the precice-profiling script
+set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "python3")
+
 set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "\
  preCICE is a coupling library for partitioned multi-physics simulations,\n\
@@ -86,6 +89,11 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_STRUCT_PERMISSION TRUE)
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${preCICE_SOURCE_DIR}/tools/releasing/packaging/debian/triggers")
 set(CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS TRUE)
 set(CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS_POLICY "=")
+
+# Handling version conflicts
+set(CPACK_DEBIAN_PACKAGE_PROVIDES precice)
+set(CPACK_DEBIAN_PACKAGE_CONFLICTS "precice, libprecice2")
+set(CPACK_DEBIAN_PACKAGE_REPLACES precice)
 
 # Install doc files
 install(FILES tools/releasing/packaging/debian/copyright

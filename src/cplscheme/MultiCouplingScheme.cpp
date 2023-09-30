@@ -28,9 +28,8 @@ MultiCouplingScheme::MultiCouplingScheme(
     std::map<std::string, m2n::PtrM2N> m2ns,
     constants::TimesteppingMethod      dtMethod,
     const std::string &                controller,
-    int                                maxIterations,
-    int                                extrapolationOrder)
-    : BaseCouplingScheme(maxTime, maxTimeWindows, timeWindowSize, validDigits, localParticipant, maxIterations, Implicit, dtMethod, extrapolationOrder),
+    int                                maxIterations)
+    : BaseCouplingScheme(maxTime, maxTimeWindows, timeWindowSize, validDigits, localParticipant, maxIterations, Implicit, dtMethod),
       _m2ns(std::move(m2ns)), _controller(controller), _isController(controller == localParticipant)
 {
   PRECICE_ASSERT(isImplicitCouplingScheme(), "MultiCouplingScheme is always Implicit.");
@@ -90,7 +89,7 @@ void MultiCouplingScheme::exchangeInitialData()
       for (auto &receiveExchange : _receiveDataVector) {
         receiveData(_m2ns[receiveExchange.first], receiveExchange.second, initialCommunication);
       }
-      checkDataHasBeenReceived();
+      notifyDataHasBeenReceived();
     } else {
       for (auto &receiveExchange : _receiveDataVector) {
         initializeWithZeroInitialData(receiveExchange.second);
@@ -111,7 +110,7 @@ void MultiCouplingScheme::exchangeInitialData()
       for (auto &receiveExchange : _receiveDataVector) {
         receiveData(_m2ns[receiveExchange.first], receiveExchange.second, initialCommunication);
       }
-      checkDataHasBeenReceived();
+      notifyDataHasBeenReceived();
     } else {
       for (auto &receiveExchange : _receiveDataVector) {
         initializeWithZeroInitialData(receiveExchange.second);
@@ -132,7 +131,7 @@ void MultiCouplingScheme::exchangeFirstData()
     for (auto &receiveExchange : _receiveDataVector) {
       receiveData(_m2ns[receiveExchange.first], receiveExchange.second);
     }
-    checkDataHasBeenReceived();
+    notifyDataHasBeenReceived();
   } else {
     for (auto &sendExchange : _sendDataVector) {
       sendData(_m2ns[sendExchange.first], sendExchange.second);
@@ -147,29 +146,22 @@ void MultiCouplingScheme::exchangeSecondData()
 
   if (not _isController) {
     receiveConvergence(_m2ns[_controller]);
-    if (hasConverged()) {
-      moveToNextWindow();
-    }
     for (auto &receiveExchange : _receiveDataVector) {
       receiveData(_m2ns[receiveExchange.first], receiveExchange.second);
     }
-    checkDataHasBeenReceived();
-  }
-
-  if (_isController) {
+    notifyDataHasBeenReceived();
+  } else {
     doImplicitStep();
-  }
-
-  if (_isController) {
     for (const auto &m2n : _m2ns | boost::adaptors::map_values) {
       sendConvergence(m2n);
-    }
-    if (hasConverged()) {
-      moveToNextWindow();
     }
     for (auto &sendExchange : _sendDataVector) {
       sendData(_m2ns[sendExchange.first], sendExchange.second);
     }
+  }
+
+  if (hasConverged()) {
+    moveToNextWindow();
   }
 
   storeIteration();
