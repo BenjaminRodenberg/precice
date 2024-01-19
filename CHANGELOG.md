@@ -61,7 +61,7 @@ All notable changes to this project will be documented in this file. For future 
 - Changed direct-mesh access to be non-experimental. (https://github.com/precice/precice/pull/1740)
 - Changed error to warning when trying to add a zero-value column to `V` matrix in QN-acceleration. (https://github.com/precice/precice/pull/1863)
 - Changed execution order of schemes per participant to explicit schemes in configured order, followed by one optional implicit scheme. (https://github.com/precice/precice/pull/1462)
-- Changed internal time handling to a Kahan accumulator, preventing issues combining `max-time` with small a `time-windows-size`. (https://github.com/precice/precice/pull/1933)
+- Changed internal time handling to a Kahan accumulator, preventing issues combining `max-time` with a small `time-windows-size` or when subcycling. (https://github.com/precice/precice/pull/1933 https://github.com/precice/precice/pull/1934)
 - Changed read mapping to be conditional during data initialization. This has a minor influence on some events being triggered and avoids performing unnecessary mappings. See #834. (https://github.com/precice/precice/pull/1404)
 - Changed storage so that it does not build the B-spline interpolant when reading from existing timestamps. (https://github.com/precice/precice/pull/1837)
 - Changed the data API to taking `precice::span`, reducing the API to `readData`, `writeData`, and `writeGradientData`. Sizes are checked at the API boundary and are required to be consistent. (https://github.com/precice/precice/pull/1636)
