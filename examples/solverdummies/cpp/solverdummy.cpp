@@ -70,6 +70,7 @@ int main(int argc, char **argv)
     }
 
     double dt = participant.getMaxTimeStepSize();
+    std::cout << dt << std::endl;
     participant.readData(meshName, dataReadName, vertexIDs, dt, readData);
 
     for (int i = 0; i < numberOfVertices * dimensions; i++) {

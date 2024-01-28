@@ -364,6 +364,8 @@ void ParticipantImpl::advance(
   PRECICE_CHECK(isCouplingOngoing(), "advance() cannot be called when isCouplingOngoing() returns false.");
   PRECICE_CHECK(!math::equals(computedTimeStepSize, 0.0), "advance() cannot be called with a time step size of 0.");
   PRECICE_CHECK(computedTimeStepSize > 0.0, "advance() cannot be called with a negative time step size {}.", computedTimeStepSize);
+  PRECICE_CHECK(computedTimeStepSize <= getMaxTimeStepSize(), "advance() cannot be called with a time step size {} that is larger than the return value {} of getMaxTimeStepSize()", computedTimeStepSize, getMaxTimeStepSize());
+  PRECICE_WARN("advancing with time step size {}, the return value of getMaxTimeStepSize() is {}.", computedTimeStepSize, getMaxTimeStepSize());
   _numberAdvanceCalls++;
 
 #ifndef NDEBUG
