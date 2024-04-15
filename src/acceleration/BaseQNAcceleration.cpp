@@ -296,13 +296,8 @@ void BaseQNAcceleration::performAcceleration(
     _oldXTilde    = _values;    // Store x tilde
     _oldResiduals = _residuals; // Store current residual
 
-    // Perform constant relaxation
-    // with residual: x_new = x_old + omega * res
-    _residuals *= _initialRelaxation;
-    _residuals += _oldValues;
-    _values = _residuals;
-
-    computeUnderrelaxationSecondaryData(cplData);
+    // Perform relaxation on all of the data
+    applyRelaxation(_initialRelaxation, cplData);
   } else {
     PRECICE_DEBUG("   Performing quasi-Newton Step");
 
@@ -632,5 +627,24 @@ void BaseQNAcceleration::writeInfo(
   }
   _infostringstream << std::flush;
 }
+
+void Acceleration::concatenateCouplingData(
+    const DataMap &cplData, const std::vector<DataID> &dataIDs, Eigen::VectorXd &targetValues, Eigen::VectorXd &targetOldValues) const
+{
+  Eigen::Index offset = 0;
+  for (auto id : dataIDs) {
+    Eigen::Index size      = cplData.at(id)->values().size();
+    auto &       values    = cplData.at(id)->values();
+    const auto & oldValues = cplData.at(id)->previousIteration();
+    PRECICE_ASSERT(targetValues.size() >= offset + size, "Target vector was not initialized.", targetValues.size(), offset + size);
+    PRECICE_ASSERT(targetOldValues.size() >= offset + size, "Target vector was not initialized.");
+    for (Eigen::Index i = 0; i < size; i++) {
+      targetValues(i + offset)    = values(i);
+      targetOldValues(i + offset) = oldValues(i);
+    }
+    offset += size;
+  }
+}
+
 } // namespace acceleration
 } // namespace precice

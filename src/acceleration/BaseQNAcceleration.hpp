@@ -185,6 +185,10 @@ protected:
    */
   bool _resetLS = false;
 
+  /// @brief List of the time grid to which all the data will be interpolated to
+  /// Stored in a map, since each data entry has its own time grid
+  std::map<int, Eigen::VectorXd> _timeGrids;
+
   /// @brief Solver output from last iteration.
   Eigen::VectorXd _oldXTilde;
 
