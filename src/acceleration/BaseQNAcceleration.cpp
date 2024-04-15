@@ -90,11 +90,6 @@ void BaseQNAcceleration::initialize(
 
   checkDataIDs(cplData);
 
-  for (const auto &data : cplData | boost::adaptors::map_values) {
-    PRECICE_CHECK(!data->exchangeSubsteps(),
-                  "Quasi-Newton acceleration does not yet support using data from all substeps. Please set substeps=\"false\" in the exchange tag of data \"{}\".", data->getDataName());
-  }
-
   size_t              entries = 0;
   std::vector<size_t> subVectorSizes; // needed for preconditioner
 
