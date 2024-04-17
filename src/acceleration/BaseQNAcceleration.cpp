@@ -177,10 +177,6 @@ void BaseQNAcceleration::updateDifferenceMatrices(
 {
   PRECICE_TRACE();
 
-  // Compute current residual: vertex-data - oldData
-  _residuals = _values;
-  _residuals -= _oldValues;
-
   PRECICE_WARN_IF(math::equals(utils::IntraComm::l2norm(_residuals), 0.0),
                   "The coupling residual equals almost zero. There is maybe something wrong in your adapter. "
                   "Maybe you always write the same data or you call advance without "
@@ -279,7 +275,10 @@ void BaseQNAcceleration::performAcceleration(
   PRECICE_ASSERT(_oldValues.size() == _oldXTilde.size(), _oldValues.size(), _oldXTilde.size());
   PRECICE_ASSERT(_residuals.size() == _oldXTilde.size(), _residuals.size(), _oldXTilde.size());
 
-  // assume data structures associated with the LS system can be updated easily.
+  if (_firstIteration && _firstTimeWindow) {
+    saveTimeGrid(cplData);
+    reSizeVectors(cplData, _dataIDs);
+  }
 
   // scale data values (and secondary data values)
   concatenateCouplingData(cplData, _dataIDs, _values, _oldValues);
@@ -358,11 +357,6 @@ void BaseQNAcceleration::performAcceleration(
     Eigen::VectorXd xUpdate = Eigen::VectorXd::Zero(_residuals.size());
     computeQNUpdate(cplData, xUpdate);
 
-    /**
-     * apply quasiNewton update
-     */
-    _values += xUpdate;
-
     // pending deletion: delete old V, W matrices if timeWindowsReused = 0
     // those were only needed for the first iteration (instead of underrelax.)
     if (_firstIteration && _timeWindowsReused == 0 && not _forceInitialRelaxation) {
@@ -395,9 +389,13 @@ void BaseQNAcceleration::performAcceleration(
         "data in succeeding iterations. Or you do not properly save and reload checkpoints. "
         "If you give the correct data this could also mean that the coupled problem is too hard to solve. Try to use a QR "
         "filter or increase its threshold (larger epsilon).");
+
+    /**
+     * apply quasiNewton update to waveform
+     */
+    applyQNUpdateToCouplingData(cplData, xUpdate);
   }
 
-  splitCouplingData(cplData);
   // number of iterations (usually equals number of columns in LS-system)
   its++;
   _firstIteration = false;
@@ -422,22 +420,6 @@ void BaseQNAcceleration::applyFilter()
       PRECICE_DEBUG(" Filter: removing column with index {} in iteration {} of time window: {}", delIndices[i], its, tWindows);
     }
     PRECICE_ASSERT(_matrixV.cols() == _qrV.cols(), _matrixV.cols(), _qrV.cols());
-  }
-}
-
-void BaseQNAcceleration::splitCouplingData(
-    const DataMap &cplData)
-{
-  PRECICE_TRACE();
-
-  int offset = 0;
-  for (int id : _dataIDs) {
-    int   size       = cplData.at(id)->getSize();
-    auto &valuesPart = cplData.at(id)->values();
-    for (int i = 0; i < size; i++) {
-      valuesPart(i) = _values(i + offset);
-    }
-    offset += size;
   }
 }
 
@@ -628,21 +610,162 @@ void BaseQNAcceleration::writeInfo(
   _infostringstream << std::flush;
 }
 
-void Acceleration::concatenateCouplingData(
-    const DataMap &cplData, const std::vector<DataID> &dataIDs, Eigen::VectorXd &targetValues, Eigen::VectorXd &targetOldValues) const
+void BaseQNAcceleration::concatenateCouplingData(
+    const DataMap &cplData, const std::vector<DataID> &dataIDs, Eigen::VectorXd &values, Eigen::VectorXd &residuals) const
 {
-  Eigen::Index offset = 0;
-  for (auto id : dataIDs) {
-    Eigen::Index size      = cplData.at(id)->values().size();
-    auto &       values    = cplData.at(id)->values();
-    const auto & oldValues = cplData.at(id)->previousIteration();
-    PRECICE_ASSERT(targetValues.size() >= offset + size, "Target vector was not initialized.", targetValues.size(), offset + size);
-    PRECICE_ASSERT(targetOldValues.size() >= offset + size, "Target vector was not initialized.");
-    for (Eigen::Index i = 0; i < size; i++) {
-      targetValues(i + offset)    = values(i);
-      targetOldValues(i + offset) = oldValues(i);
+  /// If not reduced Quasi Newton then sample the residual of data in dataIDs to the corresponding time grid in _timeGrids and concatenate everything into a long vector
+  if (!_reduced) {
+    Eigen::Index offset = 0;
+
+    for (int id : _dataIDs) {
+      auto         waveform = cplData.at(id)->timeStepsStorage();
+      Eigen::Index dataDim  = cplData.at(id)->getDimensions();
+
+      for (double t : _timeGrids.at(id)) {
+
+        Eigen::VectorXd data = waveform.sample(t) - cplData.at(id)->getPreviousValuesAtTime(t);
+        PRECICE_ASSERT(residuals.size() >= offset + dataDim, "the residuals were not initialized correctly");
+
+        for (Eigen::Index i = 0; i < dataDim; i++) {
+          residuals(i + offset) = data(i);
+        }
+        offset += dataDim;
+      }
     }
-    offset += size;
+  } else {
+    Eigen::Index offset = 0;
+    for (auto id : dataIDs) {
+      Eigen::Index size      = cplData.at(id)->values().size();
+      auto &       values    = cplData.at(id)->values();
+      const auto & oldValues = cplData.at(id)->previousIteration();
+      PRECICE_ASSERT(residuals.size() >= offset + size, "the residuals were not initialized correctly");
+      for (Eigen::Index i = 0; i < size; i++) {
+        residuals(i + offset) = values(i) - oldValues(i);
+      }
+      offset += size;
+    }
+  }
+  /// Sample all the data to the corresponding time grid in _timeGrids and concatenate everything into a long vector
+  Eigen::Index offset = 0;
+
+  for (int id : _dataIDs) {
+    auto         waveform = cplData.at(id)->timeStepsStorage();
+    Eigen::Index dataDim  = cplData.at(id)->getDimensions();
+
+    for (double t : _timeGrids.at(id)) {
+
+      Eigen::VectorXd data = waveform.sample(t);
+      PRECICE_ASSERT(values.size() >= offset + dataDim, "the values were not initialized correctly");
+
+      for (Eigen::Index i = 0; i < dataDim; i++) {
+        values(i + offset) = data(i);
+      }
+      offset += dataDim;
+    }
+  }
+
+  for (int id : _secondaryDataIDs) {
+    auto         waveform = cplData.at(id)->timeStepsStorage();
+    Eigen::Index dataDim  = cplData.at(id)->getDimensions();
+
+    for (double t : _timeGrids.at(id)) {
+
+      Eigen::VectorXd data = waveform.sample(t);
+      PRECICE_ASSERT(values.size() >= offset + dataDim, "the values were not initialized correctly");
+
+      for (Eigen::Index i = 0; i < dataDim; i++) {
+        values(i + offset) = data(i);
+      }
+      offset += dataDim;
+    }
+  }
+}
+
+void BaseQNAcceleration::saveTimeGrid(const DataMap &cplData)
+{
+  for (auto &pair : cplData) {
+    auto            dataID   = pair.first;
+    Eigen::VectorXd timeGrid = pair.second->timeStepsStorage().getTimes();
+    _timeGrids.insert(std::pair<int, Eigen::VectorXd>(dataID, timeGrid));
+  }
+}
+
+void BaseQNAcceleration::reSizeVectors(const DataMap &cplData, const std::vector<DataID> &dataIDs)
+{
+  if (!_reduced) {
+    int residualDim = 0;
+    for (auto id : dataIDs) {
+      residualDim += _timeGrids.at(id).size() * cplData.at(id)->values().size();
+    }
+    _residuals.conservativeResize(residualDim);
+    _oldResiduals.conservativeResize(residualDim);
+  }
+
+  int valueDim = 0;
+  for (auto &pair : cplData) {
+    valueDim += _timeGrids.at(pair.first).size() * pair.second->values().size();
+  }
+  _values.conservativeResize(valueDim);
+  _oldValues.conservativeResize(valueDim);
+  _oldXTilde.conservativeResize(valueDim);
+}
+
+void BaseQNAcceleration::applyQNUpdateToCouplingData(
+    const DataMap &cplData, Eigen::VectorXd xUpdate)
+{
+  PRECICE_TRACE();
+  // offset to keep track of the position in xUpdate
+  Eigen::Index offset = 0;
+
+  for (int id : _dataIDs) {
+
+    auto &couplingData = *cplData.at(id);
+    auto  dataDim      = couplingData.getDimensions();
+
+    Eigen::VectorXd tGrid = _timeGrids.at(id);
+    time::Storage   dx;
+    dx.setInterpolationDegree(couplingData.timeStepsStorage().getInterpolationDegree());
+    for (double t : _timeGrids.at(id)) {
+      Eigen::VectorXd temp = Eigen::VectorXd::Zero(dataDim);
+      for (int i = 0; i < dataDim; i++) {
+        temp(i) = xUpdate(offset + i);
+      }
+      offset += dataDim;
+      time::Sample sample(dataDim, temp);
+      dx.setSampleAtTime(t, sample);
+    }
+
+    for (auto &stample : couplingData.timeStepsStorage().stamples()) {
+      auto &values = stample.sample.values;
+      values       = values + dx.sample(stample.timestamp);
+    }
+
+    couplingData.sample() = couplingData.timeStepsStorage().last().sample;
+  }
+
+  for (int id : _secondaryDataIDs) {
+
+    auto &couplingData = *cplData.at(id);
+    auto  dataDim      = couplingData.getDimensions();
+
+    Eigen::VectorXd tGrid = _timeGrids.at(id);
+    time::Storage   dx;
+    dx.setInterpolationDegree(couplingData.timeStepsStorage().getInterpolationDegree());
+    for (double t : _timeGrids.at(id)) {
+      Eigen::VectorXd temp = Eigen::VectorXd::Zero(dataDim);
+      for (int i = 0; i < dataDim; i++) {
+        temp(i) = xUpdate(offset + i);
+      }
+      offset += dataDim;
+      time::Sample sample(dataDim, temp);
+      dx.setSampleAtTime(t, sample);
+    }
+
+    for (auto &stample : couplingData.timeStepsStorage().stamples()) {
+      auto &values = stample.sample.values;
+      values       = values + dx.sample(stample.timestamp);
+    }
+    couplingData.sample() = couplingData.timeStepsStorage().last().sample;
   }
 }
 
