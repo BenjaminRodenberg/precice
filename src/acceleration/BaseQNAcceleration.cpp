@@ -150,9 +150,6 @@ void BaseQNAcceleration::initialize(
     _infostringstream << fmt::format("\n--------\n DOFs (global): {}\n", entries);
   }
 
-  // set the number of global rows in the QRFactorization.
-  _qrV.setGlobalRows(getLSSystemRows());
-
   // Fetch secondary data IDs, to be relaxed with same coefficients from IQN-ILS
   for (const DataMap::value_type &pair : cplData) {
     if (not utils::contained(pair.first, _dataIDs)) {
@@ -161,8 +158,6 @@ void BaseQNAcceleration::initialize(
       _secondaryResiduals[pair.first] = Eigen::VectorXd::Zero(secondaryEntries);
     }
   }
-
-  _preconditioner->initialize(subVectorSizes);
 }
 
 /** ---------------------------------------------------------------------------------------------
@@ -270,18 +265,29 @@ void BaseQNAcceleration::performAcceleration(
 
   profiling::Event e("cpl.computeQuasiNewtonUpdate", profiling::Synchronize);
 
-  PRECICE_ASSERT(_oldResiduals.size() == _oldXTilde.size(), _oldResiduals.size(), _oldXTilde.size());
+  PRECICE_ASSERT(_oldResiduals.size() == _residuals.size(), _oldResiduals.size(), _residuals.size());
   PRECICE_ASSERT(_values.size() == _oldXTilde.size(), _values.size(), _oldXTilde.size());
   PRECICE_ASSERT(_oldValues.size() == _oldXTilde.size(), _oldValues.size(), _oldXTilde.size());
-  PRECICE_ASSERT(_residuals.size() == _oldXTilde.size(), _residuals.size(), _oldXTilde.size());
 
   if (_firstIteration && _firstTimeWindow) {
     saveTimeGrid(cplData);
     reSizeVectors(cplData, _dataIDs);
+
+    std::vector<size_t> subVectorSizes; // needed for preconditioner
+    size_t              entries = 0;
+    for (auto &elem : _dataIDs) {
+      entries += cplData.at(elem)->getSize();
+      subVectorSizes.push_back(cplData.at(elem)->getSize() * cplData.at(elem)->timeStepsStorage().nTimes());
+    }
+
+    // set the number of global rows in the QRFactorization.
+    _qrV.setGlobalRows(getLSSystemRows());
+
+    _preconditioner->initialize(subVectorSizes);
   }
 
   // scale data values (and secondary data values)
-  concatenateCouplingData(cplData, _dataIDs, _values, _oldValues);
+  concatenateCouplingData(cplData, _dataIDs, _values, _residuals);
 
   /** update the difference matrices V,W  includes:
    * scaling of values
@@ -354,7 +360,7 @@ void BaseQNAcceleration::performAcceleration(
      * PRECONDITION: All objects are unscaled, except the matrices within the QR-dec of V.
      *               Thus, the pseudo inverse needs to be reverted before using it.
      */
-    Eigen::VectorXd xUpdate = Eigen::VectorXd::Zero(_residuals.size());
+    Eigen::VectorXd xUpdate = Eigen::VectorXd::Zero(_values.size());
     computeQNUpdate(cplData, xUpdate);
 
     // pending deletion: delete old V, W matrices if timeWindowsReused = 0
@@ -619,11 +625,12 @@ void BaseQNAcceleration::concatenateCouplingData(
 
     for (int id : _dataIDs) {
       auto         waveform = cplData.at(id)->timeStepsStorage();
-      Eigen::Index dataDim  = cplData.at(id)->getDimensions();
+      Eigen::Index dataDim  = cplData.at(id)->values().size();
 
       for (double t : _timeGrids.at(id)) {
 
         Eigen::VectorXd data = waveform.sample(t) - cplData.at(id)->getPreviousValuesAtTime(t);
+
         PRECICE_ASSERT(residuals.size() >= offset + dataDim, "the residuals were not initialized correctly");
 
         for (Eigen::Index i = 0; i < dataDim; i++) {
@@ -650,7 +657,7 @@ void BaseQNAcceleration::concatenateCouplingData(
 
   for (int id : _dataIDs) {
     auto         waveform = cplData.at(id)->timeStepsStorage();
-    Eigen::Index dataDim  = cplData.at(id)->getDimensions();
+    Eigen::Index dataDim  = cplData.at(id)->values().size();
 
     for (double t : _timeGrids.at(id)) {
 
@@ -666,7 +673,7 @@ void BaseQNAcceleration::concatenateCouplingData(
 
   for (int id : _secondaryDataIDs) {
     auto         waveform = cplData.at(id)->timeStepsStorage();
-    Eigen::Index dataDim  = cplData.at(id)->getDimensions();
+    Eigen::Index dataDim  = cplData.at(id)->values().size();
 
     for (double t : _timeGrids.at(id)) {
 
@@ -720,11 +727,12 @@ void BaseQNAcceleration::applyQNUpdateToCouplingData(
   for (int id : _dataIDs) {
 
     auto &couplingData = *cplData.at(id);
-    auto  dataDim      = couplingData.getDimensions();
+    auto  dataDim      = couplingData.sample().values.size();
 
     Eigen::VectorXd tGrid = _timeGrids.at(id);
     time::Storage   dx;
     dx.setInterpolationDegree(couplingData.timeStepsStorage().getInterpolationDegree());
+
     for (double t : _timeGrids.at(id)) {
       Eigen::VectorXd temp = Eigen::VectorXd::Zero(dataDim);
       for (int i = 0; i < dataDim; i++) {
@@ -734,19 +742,16 @@ void BaseQNAcceleration::applyQNUpdateToCouplingData(
       time::Sample sample(dataDim, temp);
       dx.setSampleAtTime(t, sample);
     }
-
     for (auto &stample : couplingData.timeStepsStorage().stamples()) {
-      auto &values = stample.sample.values;
-      values       = values + dx.sample(stample.timestamp);
+      stample.sample.values += dx.sample(stample.timestamp);
     }
-
     couplingData.sample() = couplingData.timeStepsStorage().last().sample;
   }
 
   for (int id : _secondaryDataIDs) {
 
     auto &couplingData = *cplData.at(id);
-    auto  dataDim      = couplingData.getDimensions();
+    auto  dataDim      = couplingData.sample().values.size();
 
     Eigen::VectorXd tGrid = _timeGrids.at(id);
     time::Storage   dx;
