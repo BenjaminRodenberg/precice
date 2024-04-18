@@ -275,9 +275,14 @@ void BaseQNAcceleration::performAcceleration(
 
     std::vector<size_t> subVectorSizes; // needed for preconditioner
     size_t              entries = 0;
+
     for (auto &elem : _dataIDs) {
       entries += cplData.at(elem)->getSize();
-      subVectorSizes.push_back(cplData.at(elem)->getSize() * cplData.at(elem)->timeStepsStorage().nTimes());
+      if (!_reduced) {
+        subVectorSizes.push_back(cplData.at(elem)->getSize() * cplData.at(elem)->timeStepsStorage().nTimes());
+      } else {
+        subVectorSizes.push_back(cplData.at(elem)->getSize());
+      }
     }
 
     // set the number of global rows in the QRFactorization.

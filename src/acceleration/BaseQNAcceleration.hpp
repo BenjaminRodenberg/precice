@@ -283,7 +283,7 @@ private:
   std::map<int, Eigen::VectorXd> _timeGrids;
 
   /// @brief  Toggle to switch between using all of the substeps when constructing V_k or only the last time step of the time window.
-  bool _reduced = false;
+  bool _reduced = true;
 
   /// @brief Concatenation of all coupling data involved in the QN system.
   Eigen::VectorXd _values;
