@@ -61,10 +61,26 @@ target_sources(testprecice
     tests/parallel/mapping-volume/ParallelTriangleConservative2To1.cpp
     tests/quasi-newton/helpers.cpp
     tests/quasi-newton/helpers.hpp
+    tests/quasi-newton/parallel/TestQN1.cpp
+    tests/quasi-newton/parallel/TestQN10.cpp
+    tests/quasi-newton/parallel/TestQN10EmptyPartition.cpp
+    tests/quasi-newton/parallel/TestQN1EmptyPartition.cpp
     tests/quasi-newton/parallel/TestQN2.cpp
     tests/quasi-newton/parallel/TestQN2EmptyPartition.cpp
+    tests/quasi-newton/parallel/TestQN3.cpp
+    tests/quasi-newton/parallel/TestQN3EmptyPartition.cpp
     tests/quasi-newton/parallel/TestQN4.cpp
     tests/quasi-newton/parallel/TestQN4EmptyPartition.cpp
+    tests/quasi-newton/parallel/TestQN5.cpp
+    tests/quasi-newton/parallel/TestQN5EmptyPartition.cpp
+    tests/quasi-newton/parallel/TestQN6.cpp
+    tests/quasi-newton/parallel/TestQN6EmptyPartition.cpp
+    tests/quasi-newton/parallel/TestQN7.cpp
+    tests/quasi-newton/parallel/TestQN7EmptyPartition.cpp
+    tests/quasi-newton/parallel/TestQN8.cpp
+    tests/quasi-newton/parallel/TestQN8EmptyPartition.cpp
+    tests/quasi-newton/parallel/TestQN9.cpp
+    tests/quasi-newton/parallel/TestQN9EmptyPartition.cpp
     tests/quasi-newton/parallel/TestQNWithWaveforms.cpp
     tests/quasi-newton/serial/DefaultConfig.cpp
     tests/quasi-newton/serial/TestQN1.cpp
