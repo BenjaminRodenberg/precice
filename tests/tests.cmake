@@ -94,6 +94,7 @@ target_sources(testprecice
     tests/quasi-newton/serial/TestQN8.cpp
     tests/quasi-newton/serial/TestQN9.cpp
     tests/quasi-newton/serial/TestQNWithWaveforms.cpp
+    tests/quasi-newton/serial/TestReducedQNWithWaveforms.cpp
     tests/serial/AitkenAcceleration.cpp
     tests/serial/ImplicitCheckpointing.cpp
     tests/serial/PreconditionerBug.cpp
