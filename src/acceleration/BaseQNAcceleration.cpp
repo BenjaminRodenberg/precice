@@ -629,19 +629,20 @@ void BaseQNAcceleration::concatenateCouplingData(
     Eigen::Index offset = 0;
 
     for (int id : _dataIDs) {
-      auto         waveform = cplData.at(id)->timeStepsStorage();
-      Eigen::Index dataDim  = cplData.at(id)->values().size();
+      auto            waveform = cplData.at(id)->timeStepsStorage();
+      Eigen::Index    dataSize = cplData.at(id)->values().size();
+      Eigen::VectorXd timeGrid = _timeGrids.at(id);
 
-      for (double t : _timeGrids.at(id)) {
+      for (int i = 0; i < timeGrid.size(); i++) {
 
-        Eigen::VectorXd data = waveform.sample(t) - cplData.at(id)->getPreviousValuesAtTime(t);
+        Eigen::VectorXd data = waveform.sample(timeGrid(i)) - cplData.at(id)->getPreviousValuesAtTime(timeGrid(i));
 
-        PRECICE_ASSERT(residuals.size() >= offset + dataDim, "the residuals were not initialized correctly");
+        PRECICE_ASSERT(residuals.size() >= offset + dataSize, "the residuals were not initialized correctly");
 
-        for (Eigen::Index i = 0; i < dataDim; i++) {
+        for (Eigen::Index i = 0; i < dataSize; i++) {
           residuals(i + offset) = data(i);
         }
-        offset += dataDim;
+        offset += dataSize;
       }
     }
   } else {
@@ -661,34 +662,34 @@ void BaseQNAcceleration::concatenateCouplingData(
   Eigen::Index offset = 0;
 
   for (int id : _dataIDs) {
-    auto         waveform = cplData.at(id)->timeStepsStorage();
-    Eigen::Index dataDim  = cplData.at(id)->values().size();
+    auto            waveform = cplData.at(id)->timeStepsStorage();
+    Eigen::Index    dataSize = cplData.at(id)->values().size();
+    Eigen::VectorXd timeGrid = _timeGrids.at(id);
+    for (int i = 0; i < timeGrid.size(); i++) {
 
-    for (double t : _timeGrids.at(id)) {
+      Eigen::VectorXd data = waveform.sample(timeGrid(i));
+      PRECICE_ASSERT(values.size() >= offset + dataSize, "the values were not initialized correctly");
 
-      Eigen::VectorXd data = waveform.sample(t);
-      PRECICE_ASSERT(values.size() >= offset + dataDim, "the values were not initialized correctly");
-
-      for (Eigen::Index i = 0; i < dataDim; i++) {
+      for (Eigen::Index i = 0; i < dataSize; i++) {
         values(i + offset) = data(i);
       }
-      offset += dataDim;
+      offset += dataSize;
     }
   }
 
   for (int id : _secondaryDataIDs) {
     auto         waveform = cplData.at(id)->timeStepsStorage();
-    Eigen::Index dataDim  = cplData.at(id)->values().size();
+    Eigen::Index dataSize = cplData.at(id)->values().size();
 
     for (double t : _timeGrids.at(id)) {
 
       Eigen::VectorXd data = waveform.sample(t);
-      PRECICE_ASSERT(values.size() >= offset + dataDim, "the values were not initialized correctly");
+      PRECICE_ASSERT(values.size() >= offset + dataSize, "the values were not initialized correctly");
 
-      for (Eigen::Index i = 0; i < dataDim; i++) {
+      for (Eigen::Index i = 0; i < dataSize; i++) {
         values(i + offset) = data(i);
       }
-      offset += dataDim;
+      offset += dataSize;
     }
   }
 }
@@ -732,19 +733,19 @@ void BaseQNAcceleration::applyQNUpdateToCouplingData(
   for (int id : _dataIDs) {
 
     auto &couplingData = *cplData.at(id);
-    auto  dataDim      = couplingData.sample().values.size();
+    auto  dataSize     = couplingData.sample().values.size();
 
     Eigen::VectorXd tGrid = _timeGrids.at(id);
     time::Storage   dx;
     dx.setInterpolationDegree(couplingData.timeStepsStorage().getInterpolationDegree());
 
     for (double t : _timeGrids.at(id)) {
-      Eigen::VectorXd temp = Eigen::VectorXd::Zero(dataDim);
-      for (int i = 0; i < dataDim; i++) {
+      Eigen::VectorXd temp = Eigen::VectorXd::Zero(dataSize);
+      for (int i = 0; i < dataSize; i++) {
         temp(i) = xUpdate(offset + i);
       }
-      offset += dataDim;
-      time::Sample sample(dataDim, temp);
+      offset += dataSize;
+      time::Sample sample(dataSize, temp);
       dx.setSampleAtTime(t, sample);
     }
     for (auto &stample : couplingData.timeStepsStorage().stamples()) {
@@ -756,18 +757,18 @@ void BaseQNAcceleration::applyQNUpdateToCouplingData(
   for (int id : _secondaryDataIDs) {
 
     auto &couplingData = *cplData.at(id);
-    auto  dataDim      = couplingData.sample().values.size();
+    auto  dataSize     = couplingData.sample().values.size();
 
     Eigen::VectorXd tGrid = _timeGrids.at(id);
     time::Storage   dx;
     dx.setInterpolationDegree(couplingData.timeStepsStorage().getInterpolationDegree());
     for (double t : _timeGrids.at(id)) {
-      Eigen::VectorXd temp = Eigen::VectorXd::Zero(dataDim);
-      for (int i = 0; i < dataDim; i++) {
+      Eigen::VectorXd temp = Eigen::VectorXd::Zero(dataSize);
+      for (int i = 0; i < dataSize; i++) {
         temp(i) = xUpdate(offset + i);
       }
-      offset += dataDim;
-      time::Sample sample(dataDim, temp);
+      offset += dataSize;
+      time::Sample sample(dataSize, temp);
       dx.setSampleAtTime(t, sample);
     }
 
