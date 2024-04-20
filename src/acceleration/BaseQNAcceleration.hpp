@@ -279,6 +279,9 @@ private:
   /// @brief ReSizes the vectors _residuals, _oldresiduals, _Xtilde, _OldXtilde such that they get the correct dimensions when using waveform iterations
   void reSizeVectors(const DataMap &cplData, const std::vector<DataID> &dataIDs);
 
+  /// @brief Moves the time grid to the new time window
+  void moveTimeGridToNewWindow(const DataMap &cplData, const std::vector<DataID> &dataIDs);
+
   /// @brief List of the time grid to which all the data will be interpolated to
   /// Stored in a map, since each data entry has its own time grid
   std::map<int, Eigen::VectorXd> _timeGrids;

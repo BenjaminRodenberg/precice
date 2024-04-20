@@ -271,30 +271,40 @@ void BaseQNAcceleration::performAcceleration(
   PRECICE_ASSERT(_values.size() == _oldXTilde.size(), _values.size(), _oldXTilde.size());
   PRECICE_ASSERT(_oldValues.size() == _oldXTilde.size(), _oldValues.size(), _oldXTilde.size());
 
-  if (_firstIteration && _firstTimeWindow) {
-    saveTimeGrid(cplData);
-    reSizeVectors(cplData, _dataIDs);
+  if (_firstIteration) {
 
-    std::vector<size_t> subVectorSizes; // needed for preconditioner
-    size_t              entries = 0;
+    if (_firstTimeWindow) {
+      saveTimeGrid(cplData);
+      reSizeVectors(cplData, _dataIDs);
 
-    for (auto &elem : _dataIDs) {
-      entries += cplData.at(elem)->getSize();
-      if (!_reduced) {
-        subVectorSizes.push_back(cplData.at(elem)->getSize() * cplData.at(elem)->timeStepsStorage().nTimes());
-      } else {
-        subVectorSizes.push_back(cplData.at(elem)->getSize());
+      std::vector<size_t> subVectorSizes; // needed for preconditioner
+      size_t              entries = 0;
+
+      for (auto &elem : _dataIDs) {
+        entries += cplData.at(elem)->getSize();
+        if (!_reduced) {
+          subVectorSizes.push_back(cplData.at(elem)->getSize() * cplData.at(elem)->timeStepsStorage().nTimes());
+        } else {
+          subVectorSizes.push_back(cplData.at(elem)->getSize());
+        }
       }
+
+      // set the number of global rows in the QRFactorization.
+      _qrV.setGlobalRows(getLSSystemRows());
+
+      _preconditioner->initialize(subVectorSizes);
+    } else {
+      moveTimeGridToNewWindow(cplData, _dataIDs);
     }
-
-    // set the number of global rows in the QRFactorization.
-    _qrV.setGlobalRows(getLSSystemRows());
-
-    _preconditioner->initialize(subVectorSizes);
   }
 
   // scale data values (and secondary data values)
   concatenateCouplingData(cplData, _dataIDs, _values, _residuals);
+
+  std::cout << "\n residuals \n";
+  std::cout << _residuals;
+  std::cout << "\n values \n";
+  std::cout << _values;
 
   /** update the difference matrices V,W  includes:
    * scaling of values
@@ -639,6 +649,11 @@ void BaseQNAcceleration::concatenateCouplingData(
 
         Eigen::VectorXd data = waveform.sample(timeGrid(i)) - cplData.at(id)->getPreviousValuesAtTime(timeGrid(i));
 
+        std::cout << "\n ******* waveform ******** \n";
+        std::cout << waveform.sample(timeGrid(i));
+        std::cout << "\n ******* previous data ******** \n";
+        std::cout << cplData.at(id)->getPreviousValuesAtTime(timeGrid(i));
+
         PRECICE_ASSERT(residuals.size() >= offset + dataSize, "the residuals were not initialized correctly");
 
         for (Eigen::Index i = 0; i < dataSize; i++) {
@@ -729,6 +744,11 @@ void BaseQNAcceleration::reSizeVectors(const DataMap &cplData, const std::vector
 void BaseQNAcceleration::applyQNUpdateToCouplingData(
     const DataMap &cplData, Eigen::VectorXd xUpdate)
 {
+  std::cout << "\n ******* matrix V ******** \n";
+  std::cout << _matrixV;
+  std::cout << "\n ******* matrix W ******** \n";
+  std::cout << _matrixW;
+
   PRECICE_TRACE();
   // offset to keep track of the position in xUpdate
   Eigen::Index offset = 0;
@@ -785,6 +805,27 @@ void BaseQNAcceleration::applyQNUpdateToCouplingData(
       values       = values + dx.sample(stample.timestamp);
     }
     couplingData.sample() = couplingData.timeStepsStorage().last().sample;
+  }
+}
+
+void BaseQNAcceleration::moveTimeGridToNewWindow(const DataMap &cplData, const std::vector<DataID> &dataIDs)
+{
+
+  for (auto &pair : cplData) {
+    auto            dataID      = pair.first;
+    Eigen::VectorXd newtimeGrid = pair.second->timeStepsStorage().getTimes();
+    double          newTimesMin = newtimeGrid(0);
+    double          newTimesMax = newtimeGrid(newtimeGrid.size() - 1);
+
+    Eigen::VectorXd timeGrid = _timeGrids.at(dataID);
+
+    double oldTimesMin = timeGrid(0);
+    double oldTimesMax = timeGrid(timeGrid.size() - 1);
+
+    // transform the time to the new time grid
+    auto transformNewTime = [oldTimesMin = oldTimesMin, oldTimesMax = oldTimesMax, newTimesMin = newTimesMin, newTimesMax = newTimesMax](double t) -> double { return (t - oldTimesMin) / (oldTimesMax - oldTimesMin) * (newTimesMax - newTimesMin) + newTimesMin; };
+    timeGrid              = timeGrid.unaryExpr(transformNewTime);
+    _timeGrids.at(dataID) = timeGrid;
   }
 }
 
