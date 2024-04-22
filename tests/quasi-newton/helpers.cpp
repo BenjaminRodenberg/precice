@@ -226,10 +226,14 @@ void runTestQNWithWaveforms(std::string const &config, TestContext const &contex
   double positions0[4] = {1.0, 0.0, 1.0, 0.5};
 
   if (context.isNamed("SolverOne")) {
-    interface.setMeshVertices(meshName, positions0, vertexIDs);
+    if (context.isPrimary()) {
+      interface.setMeshVertices(meshName, positions0, vertexIDs);
+    }
   } else {
     BOOST_REQUIRE(context.isNamed("SolverTwo"));
-    interface.setMeshVertices(meshName, positions0, vertexIDs);
+    if (not context.isPrimary()) {
+      interface.setMeshVertices(meshName, positions0, vertexIDs);
+    }
   }
 
   int             nSubsteps = 5;             // perform subcycling on solvers. 5 steps happen in each window.
@@ -252,7 +256,10 @@ void runTestQNWithWaveforms(std::string const &config, TestContext const &contex
       nSubStepsDone  = 0;
     }
 
-    interface.readData(meshName, readDataName, {vertexIDs, 2}, dt, {inValues, 2});
+    if ((context.isNamed("SolverOne") and context.isPrimary()) or
+        (context.isNamed("SolverTwo") and (not context.isPrimary()))) {
+      interface.readData(meshName, readDataName, {vertexIDs, 2}, dt, {inValues, 2});
+    }
 
     /*
       Solves the following linear system
@@ -274,7 +281,10 @@ void runTestQNWithWaveforms(std::string const &config, TestContext const &contex
     savedValues(nSubStepsDone, 0) = outValues[0];
     savedValues(nSubStepsDone, 1) = outValues[1];
 
-    interface.writeData(meshName, writeDataName, {vertexIDs, 2}, {outValues, 2});
+    if ((context.isNamed("SolverOne") and context.isPrimary()) or
+        (context.isNamed("SolverTwo") and (not context.isPrimary()))) {
+      interface.writeData(meshName, writeDataName, {vertexIDs, 2}, {outValues, 2});
+    }
 
     nSubStepsDone += 1;
     t += dt;
@@ -293,15 +303,15 @@ void runTestQNWithWaveforms(std::string const &config, TestContext const &contex
 
   // Check that the last time window has converged to the analytical solution
   auto analyticalSolution = [](double localTime) { return std::vector<double>{(localTime * localTime - localTime) / 3, (localTime * localTime + 2 * localTime) / 3}; };
-  std::cout << savedValues;
-  std::cout << "\n ************** \n ";
-  for (int i = 0; i < nSubsteps; i++) {
-    // scaling with the time window length which is equal to 1
-    double localTime = (1.0 * i) / nSubStepsDone + timeCheckpoint;
-    // BOOST_TEST(math::equals(savedValues(i, 0), analyticalSolution(localTime)[0], 1e-10));
-    // BOOST_TEST(math::equals(savedValues(i, 1), analyticalSolution(localTime)[1], 1e-10));
-    std::cout << analyticalSolution(localTime)[0];
-    std::cout << "\n";
+
+  if ((context.isNamed("SolverOne") and context.isPrimary()) or
+      (context.isNamed("SolverTwo") and (not context.isPrimary()))) {
+    for (int i = 0; i < nSubsteps; i++) {
+      // scaling with the time window length which is equal to 1
+      double localTime = (1.0 * i) / nSubStepsDone + timeCheckpoint;
+      BOOST_TEST(math::equals(savedValues(i, 0), analyticalSolution(localTime)[0], 1e-10));
+      BOOST_TEST(math::equals(savedValues(i, 1), analyticalSolution(localTime)[1], 1e-10));
+    }
   }
 }
 

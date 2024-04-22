@@ -110,7 +110,6 @@ void BaseQNAcceleration::initialize(
   _oldResiduals = Eigen::VectorXd::Zero(entries);
   _residuals    = Eigen::VectorXd::Zero(entries);
   _values       = Eigen::VectorXd::Zero(entries);
-  _oldValues    = Eigen::VectorXd::Zero(entries);
 
   /**
    *  make dimensions public to all procs,
@@ -269,7 +268,6 @@ void BaseQNAcceleration::performAcceleration(
 
   PRECICE_ASSERT(_oldResiduals.size() == _residuals.size(), _oldResiduals.size(), _residuals.size());
   PRECICE_ASSERT(_values.size() == _oldXTilde.size(), _values.size(), _oldXTilde.size());
-  PRECICE_ASSERT(_oldValues.size() == _oldXTilde.size(), _oldValues.size(), _oldXTilde.size());
 
   if (_firstIteration) {
 
@@ -301,11 +299,6 @@ void BaseQNAcceleration::performAcceleration(
   // scale data values (and secondary data values)
   concatenateCouplingData(cplData, _dataIDs, _values, _residuals);
 
-  std::cout << "\n residuals \n";
-  std::cout << _residuals;
-  std::cout << "\n values \n";
-  std::cout << _values;
-
   /** update the difference matrices V,W  includes:
    * scaling of values
    * computation of residuals
@@ -320,6 +313,7 @@ void BaseQNAcceleration::performAcceleration(
 
     // Perform relaxation on all of the data
     applyRelaxation(_initialRelaxation, cplData);
+
   } else {
     PRECICE_DEBUG("   Performing quasi-Newton Step");
 
@@ -412,7 +406,6 @@ void BaseQNAcceleration::performAcceleration(
         "data in succeeding iterations. Or you do not properly save and reload checkpoints. "
         "If you give the correct data this could also mean that the coupled problem is too hard to solve. Try to use a QR "
         "filter or increase its threshold (larger epsilon).");
-
     /**
      * apply quasiNewton update to waveform
      */
@@ -469,7 +462,7 @@ void BaseQNAcceleration::iterationsConverged(
   // the most recent differences for the V, W matrices have not been added so far
   // this has to be done in iterations converged, as PP won't be called any more if
   // convergence was achieved
-  concatenateCouplingData(cplData, _dataIDs, _values, _oldValues);
+  concatenateCouplingData(cplData, _dataIDs, _values, _residuals);
   updateDifferenceMatrices(cplData);
 
   if (not _matrixCols.empty() && _matrixCols.front() == 0) { // Did only one iteration
@@ -649,11 +642,6 @@ void BaseQNAcceleration::concatenateCouplingData(
 
         Eigen::VectorXd data = waveform.sample(timeGrid(i)) - cplData.at(id)->getPreviousValuesAtTime(timeGrid(i));
 
-        std::cout << "\n ******* waveform ******** \n";
-        std::cout << waveform.sample(timeGrid(i));
-        std::cout << "\n ******* previous data ******** \n";
-        std::cout << cplData.at(id)->getPreviousValuesAtTime(timeGrid(i));
-
         PRECICE_ASSERT(residuals.size() >= offset + dataSize, "the residuals were not initialized correctly");
 
         for (Eigen::Index i = 0; i < dataSize; i++) {
@@ -737,17 +725,12 @@ void BaseQNAcceleration::reSizeVectors(const DataMap &cplData, const std::vector
     valueDim += _timeGrids.at(pair.first).size() * pair.second->values().size();
   }
   _values.conservativeResize(valueDim);
-  _oldValues.conservativeResize(valueDim);
   _oldXTilde.conservativeResize(valueDim);
 }
 
 void BaseQNAcceleration::applyQNUpdateToCouplingData(
     const DataMap &cplData, Eigen::VectorXd xUpdate)
 {
-  std::cout << "\n ******* matrix V ******** \n";
-  std::cout << _matrixV;
-  std::cout << "\n ******* matrix W ******** \n";
-  std::cout << _matrixW;
 
   PRECICE_TRACE();
   // offset to keep track of the position in xUpdate
