@@ -47,6 +47,7 @@
     <max-iterations value="100" />
     <relative-convergence-measure limit="1e-7" data="Data2" mesh="MeshOne" />
     <acceleration:IQN-IMVJ>
+      <data name="Data1" mesh="MeshOne" />
       <data name="Data2" mesh="MeshOne" />
       <filter type="QR2" limit="1e-3" />
       <initial-relaxation value="1.0" />
