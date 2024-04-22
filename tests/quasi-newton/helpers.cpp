@@ -224,15 +224,20 @@ void runTestQNWithWaveforms(std::string const &config, TestContext const &contex
 
   // meshes for rank 0 and rank 1, we use matching meshes for both participants
   double positions0[4] = {1.0, 0.0, 1.0, 0.5};
+  double positions1[4] = {2.0, 0.0, 2.0, 1.0};
 
   if (context.isNamed("SolverOne")) {
     if (context.isPrimary()) {
       interface.setMeshVertices(meshName, positions0, vertexIDs);
+    } else {
+      interface.setMeshVertices(meshName, positions1, vertexIDs);
     }
   } else {
     BOOST_REQUIRE(context.isNamed("SolverTwo"));
     if (not context.isPrimary()) {
       interface.setMeshVertices(meshName, positions0, vertexIDs);
+    } else {
+      interface.setMeshVertices(meshName, positions1, vertexIDs);
     }
   }
 
@@ -256,10 +261,7 @@ void runTestQNWithWaveforms(std::string const &config, TestContext const &contex
       nSubStepsDone  = 0;
     }
 
-    if ((context.isNamed("SolverOne") and context.isPrimary()) or
-        (context.isNamed("SolverTwo") and (not context.isPrimary()))) {
-      interface.readData(meshName, readDataName, {vertexIDs, 2}, dt, {inValues, 2});
-    }
+    interface.readData(meshName, readDataName, {vertexIDs, 2}, dt, {inValues, 2});
 
     /*
       Solves the following linear system
@@ -281,10 +283,7 @@ void runTestQNWithWaveforms(std::string const &config, TestContext const &contex
     savedValues(nSubStepsDone, 0) = outValues[0];
     savedValues(nSubStepsDone, 1) = outValues[1];
 
-    if ((context.isNamed("SolverOne") and context.isPrimary()) or
-        (context.isNamed("SolverTwo") and (not context.isPrimary()))) {
-      interface.writeData(meshName, writeDataName, {vertexIDs, 2}, {outValues, 2});
-    }
+    interface.writeData(meshName, writeDataName, {vertexIDs, 2}, {outValues, 2});
 
     nSubStepsDone += 1;
     t += dt;
@@ -303,15 +302,11 @@ void runTestQNWithWaveforms(std::string const &config, TestContext const &contex
 
   // Check that the last time window has converged to the analytical solution
   auto analyticalSolution = [](double localTime) { return std::vector<double>{(localTime * localTime - localTime) / 3, (localTime * localTime + 2 * localTime) / 3}; };
-
-  if ((context.isNamed("SolverOne") and context.isPrimary()) or
-      (context.isNamed("SolverTwo") and (not context.isPrimary()))) {
-    for (int i = 0; i < nSubsteps; i++) {
-      // scaling with the time window length which is equal to 1
-      double localTime = (1.0 * i) / nSubStepsDone + timeCheckpoint;
-      BOOST_TEST(math::equals(savedValues(i, 0), analyticalSolution(localTime)[0], 1e-10));
-      BOOST_TEST(math::equals(savedValues(i, 1), analyticalSolution(localTime)[1], 1e-10));
-    }
+  for (int i = 0; i < nSubsteps; i++) {
+    // scaling with the time window length which is equal to 1
+    double localTime = (1.0 * i) / nSubStepsDone + timeCheckpoint;
+    BOOST_TEST(math::equals(savedValues(i, 0), analyticalSolution(localTime)[0], 1e-10));
+    BOOST_TEST(math::equals(savedValues(i, 1), analyticalSolution(localTime)[1], 1e-10));
   }
 }
 
