@@ -269,32 +269,30 @@ void BaseQNAcceleration::performAcceleration(
   PRECICE_ASSERT(_oldResiduals.size() == _residuals.size(), _oldResiduals.size(), _residuals.size());
   PRECICE_ASSERT(_values.size() == _oldXTilde.size(), _values.size(), _oldXTilde.size());
 
-  if (_firstIteration) {
+  if (_firstTimeWindow and _firstIteration) {
+    saveTimeGrid(cplData);
+    reSizeVectors(cplData, _dataIDs);
 
-    if (_firstTimeWindow) {
-      saveTimeGrid(cplData);
-      reSizeVectors(cplData, _dataIDs);
+    std::vector<size_t> subVectorSizes; // needed for preconditioner
+    size_t              entries = 0;
 
-      std::vector<size_t> subVectorSizes; // needed for preconditioner
-      size_t              entries = 0;
-
-      for (auto &elem : _dataIDs) {
-        entries += cplData.at(elem)->getSize();
-        if (!_reduced) {
-          subVectorSizes.push_back(cplData.at(elem)->getSize() * cplData.at(elem)->timeStepsStorage().nTimes());
-        } else {
-          subVectorSizes.push_back(cplData.at(elem)->getSize());
-        }
+    for (auto &elem : _dataIDs) {
+      entries += cplData.at(elem)->getSize();
+      if (!_reduced) {
+        subVectorSizes.push_back(cplData.at(elem)->getSize() * cplData.at(elem)->timeStepsStorage().nTimes());
+      } else {
+        subVectorSizes.push_back(cplData.at(elem)->getSize());
       }
-
-      // set the number of global rows in the QRFactorization.
-      _qrV.setGlobalRows(getLSSystemRows());
-
-      _preconditioner->initialize(subVectorSizes);
-    } else {
-      moveTimeGridToNewWindow(cplData, _dataIDs);
     }
+
+    // set the number of global rows in the QRFactorization.
+    _qrV.setGlobalRows(getLSSystemRows());
+
+    _preconditioner->initialize(subVectorSizes);
   }
+
+  // Needs to be called every iteration, since the time window size can vary with participant first
+  moveTimeGridToNewWindow(cplData, _dataIDs);
 
   // scale data values (and secondary data values)
   concatenateCouplingData(cplData, _dataIDs, _values, _residuals);
