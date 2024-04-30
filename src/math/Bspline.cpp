@@ -1,4 +1,5 @@
 #include "math/Bspline.hpp"
+#include <Eigen/Sparse>
 #include "math/differences.hpp"
 #include "utils/assertion.hpp"
 
@@ -32,23 +33,30 @@ Bspline::Bspline(Eigen::VectorXd ts, const Eigen::MatrixXd &xs, int splineDegree
   //The code for computing the knots and the control points is copied from Eigens bspline interpolation with minor modifications, https://gitlab.com/libeigen/eigen/-/blob/master/unsupported/Eigen/src/Splines/SplineFitting.h
 
   Eigen::KnotAveraging(ts, splineDegree, _knots);
-  Eigen::DenseIndex n = xs.cols();
-  Eigen::MatrixXd   A = Eigen::MatrixXd::Zero(n, n);
+  Eigen::DenseIndex           n = xs.cols();
+  Eigen::SparseMatrix<double> A(n, n);
 
+  std::vector<Eigen::Triplet<double>> matrixEntries;
   for (Eigen::DenseIndex i = 1; i < n - 1; ++i) {
     //Attempt at hack... the spline dimension is not used here explicitly
-    const Eigen::DenseIndex span = Eigen::Spline<double, 1>::Span(ts[i], splineDegree, _knots);
+    const Eigen::DenseIndex span      = Eigen::Spline<double, 1>::Span(ts[i], splineDegree, _knots);
+    auto                    basisFunc = Eigen::Spline<double, 1>::BasisFunctions(ts[i], splineDegree, _knots);
 
-    // The segment call should somehow be told the spline order at compile time.
-    A.row(i).segment(span - splineDegree, splineDegree + 1) = Eigen::Spline<double, 1>::BasisFunctions(ts[i], splineDegree, _knots);
+    for (Eigen::DenseIndex j = 0; j < splineDegree + 1; ++j) {
+      matrixEntries.push_back(Eigen::Triplet<double>(i, span - splineDegree + j, basisFunc(j)));
+    }
   }
-  A(0, 0)         = 1.0;
-  A(n - 1, n - 1) = 1.0;
 
-  auto qr = A.householderQr();
+  matrixEntries.push_back(Eigen::Triplet<double>(0, 0, 1.0));
+  matrixEntries.push_back(Eigen::Triplet<double>(n - 1, n - 1, 1.0));
+  A.setFromTriplets(matrixEntries.begin(), matrixEntries.end());
+  A.makeCompressed();
+
+  Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>> qr;
+  qr.analyzePattern(A);
+  qr.factorize(A);
 
   Eigen::MatrixXd controls = Eigen::MatrixXd::Zero(n, _ndofs);
-
   for (int i = 0; i < _ndofs; i++) {
     controls.col(i) = qr.solve(xs.row(i).transpose());
   }
