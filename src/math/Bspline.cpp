@@ -29,22 +29,24 @@ Bspline::Bspline(Eigen::VectorXd ts, const Eigen::MatrixXd &xs, int splineDegree
   //The code for computing the knots and the control points is copied from Eigens bspline interpolation with minor modifications, https://gitlab.com/libeigen/eigen/-/blob/master/unsupported/Eigen/src/Splines/SplineFitting.h
 
   Eigen::KnotAveraging(ts, splineDegree, _knots);
-  Eigen::DenseIndex           n = xs.cols();
-  Eigen::SparseMatrix<double> A(n, n);
-
+  Eigen::DenseIndex                   n = xs.cols();
   std::vector<Eigen::Triplet<double>> matrixEntries;
+  matrixEntries.reserve(n * splineDegree + 2);
+
   for (Eigen::DenseIndex i = 1; i < n - 1; ++i) {
     //Attempt at hack... the spline dimension is not used here explicitly
     const Eigen::DenseIndex span      = Eigen::Spline<double, 1>::Span(ts[i], splineDegree, _knots);
     auto                    basisFunc = Eigen::Spline<double, 1>::BasisFunctions(ts[i], splineDegree, _knots);
 
     for (Eigen::DenseIndex j = 0; j < splineDegree + 1; ++j) {
-      matrixEntries.push_back(Eigen::Triplet<double>(i, span - splineDegree + j, basisFunc(j)));
+      matrixEntries.insert(matrixEntries.end(), Eigen::Triplet<double>(i, span - splineDegree + j, basisFunc(j)));
     }
   }
 
-  matrixEntries.push_back(Eigen::Triplet<double>(0, 0, 1.0));
-  matrixEntries.push_back(Eigen::Triplet<double>(n - 1, n - 1, 1.0));
+  matrixEntries.insert(matrixEntries.end(), Eigen::Triplet<double>(0, 0, 1.0));
+  matrixEntries.insert(matrixEntries.end(), Eigen::Triplet<double>(n - 1, n - 1, 1.0));
+
+  Eigen::SparseMatrix<double> A(n, n);
   A.setFromTriplets(matrixEntries.begin(), matrixEntries.end());
   A.makeCompressed();
 
@@ -52,11 +54,7 @@ Bspline::Bspline(Eigen::VectorXd ts, const Eigen::MatrixXd &xs, int splineDegree
   qr.analyzePattern(A);
   qr.factorize(A);
 
-  Eigen::MatrixXd controls = Eigen::MatrixXd::Zero(n, _ndofs);
-  for (int i = 0; i < _ndofs; i++) {
-    controls.col(i) = qr.solve(xs.row(i).transpose());
-  }
-  _ctrls = std::move(controls);
+  _ctrls = qr.solve(xs.transpose());
 }
 
 Eigen::VectorXd Bspline::interpolateAt(double t) const

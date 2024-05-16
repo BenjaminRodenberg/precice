@@ -739,52 +739,41 @@ void BaseQNAcceleration::applyQNUpdateToCouplingData(
     auto &couplingData = *cplData.at(id);
     auto  dataSize     = couplingData.sample().values.size();
 
-    Eigen::VectorXd tGrid = _timeGrids.at(id);
-    time::Storage   dx;
-    dx.setInterpolationDegree(couplingData.timeStepsStorage().getInterpolationDegree());
-
     Eigen::VectorXd timeGrid = _timeGrids.at(id);
+    couplingData.timeStepsStorage().clear();
+
     for (int i = 0; i < timeGrid.size(); i++) {
 
       Eigen::VectorXd temp = Eigen::VectorXd::Zero(dataSize);
       for (int j = 0; j < dataSize; j++) {
-        temp(j) = xUpdate(offset + j);
+        temp(j) = _values(offset + j) + xUpdate(offset + j);
       }
       offset += dataSize;
+
       time::Sample sample(dataSize, temp);
-      dx.setSampleAtTime(timeGrid(i), sample);
-    }
-    for (auto &stample : couplingData.timeStepsStorage().stamples()) {
-      stample.sample.values += dx.sample(stample.timestamp);
+      couplingData.setSampleAtTime(timeGrid(i), sample);
     }
     couplingData.sample() = couplingData.timeStepsStorage().last().sample;
   }
 
   for (int id : _secondaryDataIDs) {
 
-    auto &couplingData = *cplData.at(id);
-    auto  dataSize     = couplingData.sample().values.size();
+    auto &          couplingData = *cplData.at(id);
+    auto            dataSize     = couplingData.sample().values.size();
+    Eigen::VectorXd timeGrid     = _timeGrids.at(id);
+    couplingData.timeStepsStorage().clear();
 
-    Eigen::VectorXd tGrid = _timeGrids.at(id);
-    time::Storage   dx;
-    dx.setInterpolationDegree(couplingData.timeStepsStorage().getInterpolationDegree());
-
-    Eigen::VectorXd timeGrid = _timeGrids.at(id);
     for (int i = 0; i < timeGrid.size(); i++) {
 
       Eigen::VectorXd temp = Eigen::VectorXd::Zero(dataSize);
       for (int j = 0; j < dataSize; j++) {
-        temp(j) = xUpdate(offset + j);
+        temp(j) = _values(offset + j) + xUpdate(offset + j);
       }
       offset += dataSize;
       time::Sample sample(dataSize, temp);
-      dx.setSampleAtTime(timeGrid(i), sample);
+      couplingData.setSampleAtTime(timeGrid(i), sample);
     }
 
-    for (auto &stample : couplingData.timeStepsStorage().stamples()) {
-      auto &values = stample.sample.values;
-      values       = values + dx.sample(stample.timestamp);
-    }
     couplingData.sample() = couplingData.timeStepsStorage().last().sample;
   }
 }
