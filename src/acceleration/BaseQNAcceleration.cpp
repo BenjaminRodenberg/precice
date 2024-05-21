@@ -179,7 +179,6 @@ void BaseQNAcceleration::updateDifferenceMatrices(
                   "providing new data first or you do not use available read data. "
                   "Or you just converge much further than actually necessary.");
 
-  // if (_firstIteration && (_firstTimeWindow || (_matrixCols.size() < 2))) {
   if (_firstIteration && (_firstTimeWindow || _forceInitialRelaxation)) {
     // do nothing: constant relaxation
   } else {
@@ -269,31 +268,6 @@ void BaseQNAcceleration::performAcceleration(
   PRECICE_ASSERT(_oldResiduals.size() == _residuals.size(), _oldResiduals.size(), _residuals.size());
   PRECICE_ASSERT(_values.size() == _oldXTilde.size(), _values.size(), _oldXTilde.size());
 
-  if (_firstTimeWindow and _firstIteration) {
-    saveTimeGrid(cplData);
-    reSizeVectors(cplData, _dataIDs);
-
-    std::vector<size_t> subVectorSizes; // needed for preconditioner
-    size_t              entries = 0;
-
-    for (auto &elem : _dataIDs) {
-      entries += cplData.at(elem)->getSize();
-      if (!_reduced) {
-        subVectorSizes.push_back(cplData.at(elem)->getSize() * cplData.at(elem)->timeStepsStorage().nTimes());
-      } else {
-        subVectorSizes.push_back(cplData.at(elem)->getSize());
-      }
-    }
-
-    // set the number of global rows in the QRFactorization.
-    _qrV.setGlobalRows(getLSSystemRows());
-
-    _preconditioner->initialize(subVectorSizes);
-  }
-
-  // Needs to be called every iteration, since the time window size can vary with participant first
-  moveTimeGridToNewWindow(cplData, _dataIDs);
-
   // scale data values (and secondary data values)
   concatenateCouplingData(cplData, _dataIDs, _values, _residuals);
 
@@ -311,7 +285,6 @@ void BaseQNAcceleration::performAcceleration(
 
     // Perform relaxation on all of the data
     applyRelaxation(_initialRelaxation, cplData);
-
   } else {
     PRECICE_DEBUG("   Performing quasi-Newton Step");
 
@@ -625,9 +598,36 @@ void BaseQNAcceleration::writeInfo(
 }
 
 void BaseQNAcceleration::concatenateCouplingData(
-    const DataMap &cplData, const std::vector<DataID> &dataIDs, Eigen::VectorXd &values, Eigen::VectorXd &residuals) const
+    const DataMap &cplData, const std::vector<DataID> &dataIDs, Eigen::VectorXd &values, Eigen::VectorXd &residuals)
 {
-  /// If not reduced Quasi Newton then sample the residual of data in dataIDs to the corresponding time grid in _timeGrids and concatenate everything into a long vector
+
+  // If its the first iteration of the first time window we want to save the timegrid that the quasi-Newton method uses.
+  if (_firstTimeWindow and _firstIteration) {
+    saveTimeGrid(cplData);
+    reSizeVectors(cplData, _dataIDs);
+
+    std::vector<size_t> subVectorSizes; // needed for preconditioner
+    size_t              entries = 0;
+
+    for (auto &elem : _dataIDs) {
+      entries += cplData.at(elem)->getSize();
+      if (!_reduced) {
+        subVectorSizes.push_back(cplData.at(elem)->getSize() * cplData.at(elem)->timeStepsStorage().nTimes());
+      } else {
+        subVectorSizes.push_back(cplData.at(elem)->getSize());
+      }
+    }
+
+    // set the number of global rows in the QRFactorization.
+    _qrV.setGlobalRows(getLSSystemRows());
+
+    _preconditioner->initialize(subVectorSizes);
+  }
+
+  // Needs to be called every iteration, since the time window size can vary with participant first
+  moveTimeGridToNewWindow(cplData, _dataIDs);
+
+  /// If not reduced quasi-Newton then sample the residual of data in dataIDs to the corresponding time grid in _timeGrids and concatenate everything into a long vector
   if (!_reduced) {
     Eigen::Index offset = 0;
 

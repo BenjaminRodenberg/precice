@@ -268,7 +268,7 @@ protected:
 
   /// Concatenates the coupling data into a long vector
   void concatenateCouplingData(
-      const DataMap &cplData, const std::vector<DataID> &dataIDs, Eigen::VectorXd &targetValues, Eigen::VectorXd &targetOldValues) const;
+      const DataMap &cplData, const std::vector<DataID> &dataIDs, Eigen::VectorXd &targetValues, Eigen::VectorXd &targetOldValues);
 
   int its = 0, tWindows = 0;
 
