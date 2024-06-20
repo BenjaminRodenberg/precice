@@ -428,6 +428,7 @@ void CouplingSchemeConfiguration::addTypespecifcSubtags(
   } else if (type == VALUE_PARALLEL_IMPLICIT) {
     addTagParticipants(tag);
     addTagExchange(tag);
+    PRECICE_ERROR("Parallel implicit coupling schemes have a bug in quasi-Newton acceleration! Don't use them.");
     addTagAcceleration(tag);
     addTagAbsoluteConvergenceMeasure(tag);
     addTagAbsoluteOrRelativeConvergenceMeasure(tag);
