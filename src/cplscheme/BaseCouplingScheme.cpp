@@ -130,9 +130,10 @@ void BaseCouplingScheme::sendData(const m2n::PtrM2N &m2n, const DataMap &sendDat
     PRECICE_ASSERT(nTimeSteps > 0);
 
     if (data->exchangeSubsteps()) {
-      const Eigen::VectorXd timesAscending = data->timeStepsStorage().getTimes();
-      sendNumberOfTimeSteps(m2n, nTimeSteps);
-      sendTimes(m2n, timesAscending);
+      PRECICE_ASSERT(nTimeSteps == 2);
+      // const Eigen::VectorXd timesAscending = data->timeStepsStorage().getTimes();
+      // sendNumberOfTimeSteps(m2n, nTimeSteps);
+      // sendTimes(m2n, timesAscending);
 
       const auto serialized = com::serialize::SerializedStamples::serialize(data);
 
@@ -184,11 +185,13 @@ void BaseCouplingScheme::receiveData(const m2n::PtrM2N &m2n, const DataMap &rece
   for (const auto &data : receiveData | boost::adaptors::map_values) {
 
     if (data->exchangeSubsteps()) {
-      const int nTimeSteps = receiveNumberOfTimeSteps(m2n);
+      // const int nTimeSteps = receiveNumberOfTimeSteps(m2n);
+      const int nTimeSteps = 2;
 
       Eigen::VectorXd serializedValues(nTimeSteps * data->getSize());
       PRECICE_ASSERT(nTimeSteps > 0);
-      const Eigen::VectorXd timesAscending = receiveTimes(m2n, nTimeSteps);
+      // const Eigen::VectorXd timesAscending = receiveTimes(m2n, nTimeSteps);
+      const Eigen::Vector2d timesAscending{getTimeWindowStart(), getTimeWindowStart() + getTimeWindowSize()};
 
       auto serialized = com::serialize::SerializedStamples::empty(timesAscending, data);
 
